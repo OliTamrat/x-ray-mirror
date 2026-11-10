@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X-ray Mirror</title>
+<link rel="icon" href="data:,">
+<style>
+/* Layout: a radiology light-box. The live view is the film on the left; a narrow instrument panel sits on the right and drops below on small screens. */
+:root{
+  color-scheme: dark;
+  --bg:#070b12; --panel:#0e1521; --panel-2:#131c2b; --line:#22304a;
+  --fg:#dbe6f5; --muted:#8497b3; --accent:#9fd8ff; --accent-ink:#06223a;
+  --bone:#cfe9ff; --brain:#ff9fb4; --muscle:#ff7a66; --eye:#9ff0ff; --warn:#ffcf7a;
+  --ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--ui)}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;min-height:100%;padding:16px;align-items:start}
+header.bar{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
+h1{font-size:17px;font-weight:650;letter-spacing:.02em;margin:0}
+.status{font:12px var(--mono);color:var(--muted)}
+.status b{color:var(--accent);font-weight:500}
+.status.warn b{color:var(--warn)}
+.stagewrap{min-width:0;display:flex;flex-direction:column;gap:10px}
+.screen{display:flex;flex-direction:column;gap:10px;min-width:0}
+.screen:fullscreen{background:#000;justify-content:center;padding:0}
+.screen:fullscreen .stage{max-width:calc((100vh - 64px) * var(--ar,1.7778));border:0;border-radius:0}
+.tools{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.tools button{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:8px 14px;min-height:40px}
+.tools button:disabled{opacity:.45;cursor:default}
+.stage{position:relative;width:100%;max-width:calc((100vh - 110px) * var(--ar,1.7778));aspect-ratio:var(--ar,1.7778);margin:0 auto;background:#02050a;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.mirror{position:absolute;inset:0}
+.mirror.on{transform:scaleX(-1)}
+.stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.stage video{object-fit:fill}
+#ov{pointer-events:none}
+.cover{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;background:radial-gradient(ellipse at 50% 40%,#12203a 0%,#050810 70%)}
+.cover p{margin:0;max-width:44ch;color:var(--muted)}
+.cover .err{color:var(--warn)}
+button{font:inherit;color:inherit;cursor:pointer}
+.go{background:var(--accent);color:var(--accent-ink);border:0;border-radius:5px;padding:11px 22px;font-weight:650;font-size:15px}
+.go:disabled{opacity:.6;cursor:progress}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{display:flex;flex-direction:column;gap:12px;min-width:0}
+fieldset{border:1px solid var(--line);border-radius:6px;background:var(--panel);margin:0;padding:12px 14px 14px;min-width:0}
+legend{font:11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:0 6px}
+.presets,.seg{display:flex;gap:6px;flex-wrap:wrap}
+.presets button,.seg button{flex:1 1 auto;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:6px 10px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:650}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:10px}
+.checks label,.one{display:flex;align-items:center;gap:8px;cursor:pointer}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.one{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;margin:0}
+.row{display:grid;grid-template-columns:104px 58px minmax(0,1fr);align-items:center;gap:8px;margin-top:8px}
+.row output{font:12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+.link{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;margin-top:10px}
+.tip{color:var(--muted);font-size:12.5px;margin:10px 0 0}
+.credit{color:var(--muted);font-size:12px;margin:0}
+.credit a{color:var(--accent)}
+@media (max-width:860px){.app{grid-template-columns:minmax(0,1fr);padding:10px;gap:12px}.stage{max-width:calc((100vh - 150px) * var(--ar,1.7778))}.row{grid-template-columns:minmax(0,1fr) 58px;row-gap:2px}.row input{grid-column:1/-1}input[type=range]{height:28px}.checks label,.one{min-height:32px}.presets button,.seg button{min-height:40px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <h1>X-ray Mirror</h1>
+    <div class="status" id="status" role="status"><b>Ready.</b> Nothing is recorded or uploaded; the video stays in this browser tab.</div>
+  </header>
+
+  <div class="stagewrap">
+    <div class="screen" id="screen">
+    <div class="stage" id="stage">
+      <div class="mirror on" id="mirror">
+        <video id="video" playsinline muted></video>
+        <canvas id="gl"></canvas>
+      </div>
+      <canvas id="ov"></canvas>
+      <div class="cover" id="cover">
+        <button class="go" id="start" type="button">Start camera</button>
+        <p id="covertext">Sit facing the camera in good light. The first start downloads the tracking models (about 12 MB), so it needs an internet connection.</p>
+      </div>
+    </div>
+    <div class="tools">
+      <button type="button" id="photo" disabled>Save photo</button>
+      <button type="button" id="flip" hidden>Switch camera</button>
+      <button type="button" id="full" hidden>Full screen</button>
+    </div>
+    </div>
+    <p class="credit">Anatomy models: BodyParts3D, &copy; The Database Center for Life Science (DBCLS), licensed under <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en" target="_blank" rel="noopener">CC BY-SA 2.1 Japan</a>. The meshes here were simplified and rescaled from that dataset and are shared under the same license. This is one adult's anatomy fitted over your face. It is an illustration, not a medical image of you.</p>
+  </div>
+
+  <div class="panel">
+    <fieldset>
+      <legend>Layers</legend>
+      <div class="presets">
+        <button type="button" data-preset="skull">Skull</button>
+        <button type="button" data-preset="brain">Brain</button>
+        <button type="button" data-preset="muscles">Muscles</button>
+        <button type="button" data-preset="all">Everything</button>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="l-skull"><span class="dot" style="background:var(--bone)"></span>Skull</label>
+        <label><input type="checkbox" id="l-brain"><span class="dot" style="background:var(--brain)"></span>Brain</label>
+        <label><input type="checkbox" id="l-muscles"><span class="dot" style="background:var(--muscle)"></span>Muscles</label>
+        <label><input type="checkbox" id="l-eyes"><span class="dot" style="background:var(--eye)"></span>Eyes</label>
+        <label><input type="checkbox" id="l-outline"><span class="dot" style="background:var(--accent)"></span>Face outline</label>
+        <label><input type="checkbox" id="l-hand"><span class="dot" style="background:var(--bone)"></span>Hand bones</label>
+      </div>
+      <label class="one"><input type="checkbox" id="labels">Show labels</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Look</legend>
+      <div class="seg">
+        <button type="button" id="look-xray" aria-pressed="true">X-ray</button>
+        <button type="button" id="look-solid" aria-pressed="false">Solid</button>
+      </div>
+      <div class="row"><label for="bright">Brightness</label><output id="o-bright"></output><input type="range" id="bright" min="0.3" max="2.5" step="0.05"></div>
+      <div class="row"><label for="mix">Real me showing through</label><output id="o-mix"></output><input type="range" id="mix" min="0" max="1" step="0.02"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Fit to my head</legend>
+      <div class="row"><label for="f-size">Overall size</label><output id="o-f-size"></output><input type="range" id="f-size" min="0.8" max="1.25" step="0.01"></div>
+      <div class="row"><label for="f-w">Width</label><output id="o-f-w"></output><input type="range" id="f-w" min="0.8" max="1.25" step="0.01"></div>
+      <div class="row"><label for="f-h">Height</label><output id="o-f-h"></output><input type="range" id="f-h" min="0.8" max="1.25" step="0.01"></div>
+      <div class="row"><label for="f-d">Depth</label><output id="o-f-d"></output><input type="range" id="f-d" min="0.8" max="1.25" step="0.01"></div>
+      <div class="row"><label for="f-x">Left / right</label><output id="o-f-x"></output><input type="range" id="f-x" min="-3" max="3" step="0.1"></div>
+      <div class="row"><label for="f-y">Up / down</label><output id="o-f-y"></output><input type="range" id="f-y" min="-3" max="3" step="0.1"></div>
+      <div class="row"><label for="f-z">Forward / back</label><output id="o-f-z"></output><input type="range" id="f-z" min="-3" max="3" step="0.1"></div>
+      <button type="button" class="link" id="reset">Reset fit</button>
+      <p class="tip">To line it up, pick Solid, set &ldquo;Real me showing through&rdquo; to about half, then adjust until the eye sockets sit on your eyes and the chin on your chin.</p>
+    </fieldset>
+  </div>
+</div>
+
+<script>/*__DATA__*/</script>
+<script type="module">
+const $ = id => document.getElementById(id);
+const LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
+const Q = new URLSearchParams(LOCAL ? location.search : '');
+const HOSTED = location.protocol.startsWith('http'), here = p => new URL(p, location.href).href;
+const THREE_URLS = [Q.get('three'), HOSTED && here('vendor/three.module.min.js'), 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js'].filter(Boolean);
+const MP_URLS = [Q.get('mp') && here(Q.get('mp')), HOSTED && here('vendor/tasks-vision'), 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14'].filter(Boolean);
+async function firstImport(urls, file) { let err; for (const u of urls) { try { return [await import(u + file), u]; } catch (e) { err = e; } } throw err; }
+const FACE_MODEL = Q.get('face') || 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+const HAND_MODEL = Q.get('hand') || 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+
+/* ---------- settings ---------- */
+const DEF = { layers: { skull: true, brain: true, muscles: true, eyes: true, outline: true, hand: true }, labels: true, look: 'xray', bright: 1, mix: 0.5,
+  fit: { size: 1, w: 1, h: 1, d: 1, x: 0, y: 0, z: 0 } };
+const S = JSON.parse(JSON.stringify(DEF));
+try {
+  const saved = JSON.parse(localStorage.getItem('xray-mirror') || 'null');
+  if (saved) { Object.assign(S.layers, saved.layers); Object.assign(S.fit, saved.fit);
+    for (const k of ['labels', 'look', 'bright', 'mix']) if (k in saved) S[k] = saved[k]; }
+} catch (e) {}
+const save = () => { try { localStorage.setItem('xray-mirror', JSON.stringify(S)); } catch (e) {} };
+
+const pct = v => Math.round(v * 100) + '%';
+const cm = v => (v > 0 ? '+' : '') + (+v).toFixed(1) + ' cm';
+const SL = [['bright', S, 'bright', pct], ['mix', S, 'mix', pct], ['f-size', S.fit, 'size', pct], ['f-w', S.fit, 'w', pct], ['f-h', S.fit, 'h', pct],
+  ['f-d', S.fit, 'd', pct], ['f-x', S.fit, 'x', cm], ['f-y', S.fit, 'y', cm], ['f-z', S.fit, 'z', cm]];
+function syncUI() {
+  for (const k in S.layers) $('l-' + k).checked = S.layers[k];
+  $('labels').checked = S.labels;
+  $('look-xray').setAttribute('aria-pressed', S.look === 'xray');
+  $('look-solid').setAttribute('aria-pressed', S.look === 'solid');
+  for (const [id, o, k, f] of SL) { $(id).value = o[k]; $('o-' + id).textContent = f(o[k]); }
+}
+for (const k in S.layers) $('l-' + k).addEventListener('change', e => { S.layers[k] = e.target.checked; save(); });
+$('labels').addEventListener('change', e => { S.labels = e.target.checked; save(); });
+for (const [id, o, k, f] of SL) $(id).addEventListener('input', e => { o[k] = +e.target.value; $('o-' + id).textContent = f(o[k]); save(); });
+$('look-xray').addEventListener('click', () => { S.look = 'xray'; syncUI(); save(); });
+$('look-solid').addEventListener('click', () => { S.look = 'solid'; syncUI(); save(); });
+$('reset').addEventListener('click', () => { Object.assign(S.fit, DEF.fit); syncUI(); save(); });
+const PRESET = { skull: ['skull', 'outline', 'hand'], brain: ['brain', 'outline', 'hand'], muscles: ['muscles', 'eyes', 'outline', 'hand'], all: Object.keys(DEF.layers) };
+document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
+  for (const k in S.layers) S.layers[k] = PRESET[b.dataset.preset].includes(k); syncUI(); save(); }));
+syncUI();
+
+const statusEl = $('status');
+function setStatus(strong, rest = '', warn = false) {
+  statusEl.className = 'status' + (warn ? ' warn' : '');
+  statusEl.innerHTML = ''; const b = document.createElement('b'); b.textContent = strong; statusEl.append(b, ' ' + rest);
+}
+
+/* ---------- start ---------- */
+const video = $('video'), stage = $('stage'), glc = $('gl'), ov = $('ov'), ctx = ov.getContext('2d');
+let THREE, face, hands, R = null, mirrored = true, facing = 'user', stream = null, snap = false;
+async function openCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+    throw new Error('This page is open somewhere that cannot use a camera, such as a preview inside another app or a file opened without a web address. Open its https:// link in Safari, Chrome or Edge.');
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+  } catch (e) {
+    throw new Error(e && e.name === 'NotAllowedError' ? 'The browser blocked the camera. Allow camera access for this page (the camera or lock icon in the address bar, or the site settings on a phone), then press Start again.'
+      : e && e.name === 'NotFoundError' ? 'No camera was found on this device.'
+      : e && e.name === 'NotReadableError' ? 'The camera is in use by another app. Close it and press Start again.' : 'The camera could not be opened: ' + (e && e.message || e));
+  }
+  video.srcObject = stream; await video.play();
+  mirrored = facing === 'user'; $('mirror').classList.toggle('on', mirrored);
+  stage.style.setProperty('--ar', (video.videoWidth / video.videoHeight).toFixed(4));
+}
+const dbg = window.__xray = { face: false, hands: 0, jaw: 0, frames: 0, fakeHands: null, error: null };
+
+$('start').addEventListener('click', async () => {
+  const btn = $('start'); btn.disabled = true; btn.textContent = 'Starting…';
+  try {
+    setStatus('Asking for the camera…');
+    await openCamera();
+    setStatus('Loading the 3D engine…');
+    try { [THREE] = await firstImport(THREE_URLS, ''); } catch (e) { throw new Error('The 3D library could not be downloaded. Check the internet connection and press Start again.'); }
+    setStatus('Loading face and hand tracking…', 'about 12 MB the first time');
+    let mp, MP_URL;
+    try { [mp, MP_URL] = await firstImport(MP_URLS, '/vision_bundle.mjs'); } catch (e) { throw new Error('The tracking library could not be downloaded. Check the internet connection and press Start again.'); }
+    const files = await mp.FilesetResolver.forVisionTasks(MP_URL + '/wasm');
+    const make = async delegate => {
+      const f = await mp.FaceLandmarker.createFromOptions(files, { baseOptions: { modelAssetPath: FACE_MODEL, delegate }, runningMode: 'VIDEO', numFaces: 1,
+        outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true });
+      const h = await mp.HandLandmarker.createFromOptions(files, { baseOptions: { modelAssetPath: HAND_MODEL, delegate }, runningMode: 'VIDEO', numHands: 2 });
+      return [f, h];
+    };
+    try { [face, hands] = await make(Q.get('delegate') || 'GPU'); }
+    catch (e) { try { [face, hands] = await make('CPU'); } catch (e2) { throw new Error('The tracking models could not be loaded. Check the internet connection and press Start again.'); } }
+    R = buildRenderer();
+    $('cover').hidden = true; $('cover').style.display = 'none';
+    setStatus('Tracking.', 'Open your mouth, turn your head, hold up a hand.');
+    $('photo').disabled = false;
+    try { const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); $('flip').hidden = cams.length < 2; } catch (e) {}
+    loop();
+  } catch (e) {
+    dbg.error = String(e && e.message || e);
+    const t = $('covertext'); t.textContent = dbg.error; t.className = 'err';
+    setStatus('Not started.', '', true); btn.disabled = false; btn.textContent = 'Start camera';
+  }
+});
+
+$('photo').addEventListener('click', () => { snap = true; });
+$('flip').addEventListener('click', async () => {
+  const b = $('flip'); b.disabled = true; const prev = facing; facing = facing === 'user' ? 'environment' : 'user';
+  try { await openCamera(); if (R) { R.has = false; R.rigs.forEach(r => r.pts = null); } }
+  catch (e) { facing = prev; try { await openCamera(); } catch (e2) {} setStatus('Could not switch camera.', '', true); }
+  b.disabled = false;
+});
+const screenEl = $('screen');
+if (screenEl.requestFullscreen && document.fullscreenEnabled) {
+  $('full').hidden = false;
+  $('full').addEventListener('click', () => { document.fullscreenElement ? document.exitFullscreen() : screenEl.requestFullscreen().catch(() => {}); });
+  document.addEventListener('fullscreenchange', () => { $('full').textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen'; });
+}
+function savePhoto(W, Hh) {
+  const c = document.createElement('canvas'); c.width = W; c.height = Hh; const g = c.getContext('2d');
+  g.save(); if (mirrored) { g.translate(W, 0); g.scale(-1, 1); }
+  g.drawImage(video, 0, 0, W, Hh); g.globalAlpha = +glc.style.opacity || 1; g.drawImage(glc, 0, 0, W, Hh); g.restore();
+  g.drawImage(ov, 0, 0, W, Hh);
+  dbg.lastPhoto = c;
+  c.toBlob(b => { if (!b) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'xray-mirror.png';
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }, 'image/png');
+}
+
+/* ---------- geometry ---------- */
+function buildRenderer() {
+  const M = window.XRAY_META, bin = Uint8Array.from(atob(window.XRAY_B64), c => c.charCodeAt(0)).buffer;
+  const geo = d => {
+    const q = new Uint16Array(bin, d.vo, d.nv * 3), p = new Float32Array(d.nv * 3);
+    for (let i = 0; i < p.length; i++) { const a = i % 3; p[i] = d.lo[a] + q[i] / 65535 * (d.hi[a] - d.lo[a]); }
+    const idx = d.it === 16 ? new Uint16Array(bin, d.io, d.ni) : new Uint32Array(bin, d.io, d.ni);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(p, 3)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeVertexNormals();
+    return g;
+  };
+  const renderer = new THREE.WebGLRenderer({ canvas: glc, alpha: true, antialias: true, premultipliedAlpha: true });
+  renderer.autoClear = false; renderer.setClearColor(0x000000, 0);
+
+  const COL = { skull: 0xcfe9ff, brain: 0xff9fb4, muscles: 0xff7a66, eyes: 0x9ff0ff, hand: 0xcfe9ff };
+  const SOLID = { skull: 0xe9e2d0, brain: 0xe7a3ad, muscles: 0xb5483f, eyes: 0xf2f4f6, hand: 0xe9e2d0 };
+  const xmat = (c, ortho) => new THREE.ShaderMaterial({
+    uniforms: { color: { value: new THREE.Color(c) }, gain: { value: 1 }, base: { value: ortho ? 0.14 : 0.025 } },
+    vertexShader: `varying vec3 vN; varying vec3 vV;
+      void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalMatrix * normal; vV = ${ortho ? 'vec3(0.0,0.0,1.0)' : '-mv.xyz'}; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 color; uniform float gain; uniform float base; varying vec3 vN; varying vec3 vV;
+      void main(){ float f = 1.0 - abs(dot(normalize(vN), normalize(vV))); float i = base + 0.42 * pow(f, 2.6);
+        gl_FragColor = vec4(color * i * gain, 0.0); }`,
+    side: THREE.DoubleSide, depthTest: false, depthWrite: false, transparent: true,
+    blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
+    blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor });
+  const mats = {};
+  for (const k in COL) mats[k] = { x: xmat(COL[k], k === 'hand'), s: new THREE.MeshPhongMaterial({ color: SOLID[k], shininess: 18, specular: 0x222222, side: THREE.DoubleSide }) };
+  const sil = new THREE.MeshBasicMaterial({ color: 0x030814, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+
+  // head
+  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(63, 16 / 9, 1, 2000);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x35404f, 1.6)); const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(0.4, 0.8, 1); scene.add(dl);
+  const head = new THREE.Group(); head.matrixAutoUpdate = false; head.visible = false; scene.add(head);
+  const fit = new THREE.Group(); head.add(fit);
+  const jaw = new THREE.Group(); jaw.position.fromArray(M.jawPivot); fit.add(jaw);
+  const meshes = [];
+  for (const key in M.meshes) {
+    const layer = key.split('_')[0], m = new THREE.Mesh(geo(M.meshes[key]), mats[layer].x);
+    m.userData.layer = layer; m.frustumCulled = false; meshes.push(m);
+    if (key.endsWith('_jaw')) { m.position.fromArray(M.jawPivot).negate(); jaw.add(m); } else fit.add(m);
+  }
+  // hands
+  const hscene = new THREE.Scene(), hcam = new THREE.OrthographicCamera(0, 1, 0, -1, -5000, 5000);
+  hscene.add(new THREE.HemisphereLight(0xffffff, 0x35404f, 1.6)); const dl2 = new THREE.DirectionalLight(0xffffff, 1.6); dl2.position.set(0.4, 0.8, 1); hscene.add(dl2);
+  const H = M.hand, palmG = geo(H.palm), freeG = H.free.map(geo), rigs = [];
+  for (let n = 0; n < 2; n++) {
+    const g = new THREE.Group(); g.visible = false; hscene.add(g);
+    const mk = gm => { const m = new THREE.Mesh(gm, mats.hand.x); m.matrixAutoUpdate = false; m.frustumCulled = false; m.userData.layer = 'hand'; meshes.push(m); g.add(m); return m; };
+    rigs.push({ g, palm: mk(palmG), free: freeG.map(mk), pts: null });
+  }
+  return { renderer, scene, cam, hscene, hcam, head, fit, jaw, meshes, mats, sil, rigs, M,
+    pos: new THREE.Vector3(), quat: new THREE.Quaternion(), scl: new THREE.Vector3(1, 1, 1), has: false, jawA: 0 };
+}
+
+/* ---------- per-frame ---------- */
+const PIVOT = [0, 2.62, 4.1];
+const OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+let lastT = -1, lastTs = 0, miss = 0, frameNo = 0, handEvery = 1, costAvg = 0, fpsN = 0, fpsT = performance.now();
+
+function loop() {
+  requestAnimationFrame(loop);
+  if (video.readyState < 2) return;
+  const W = video.videoWidth, Hh = video.videoHeight; if (!W) return;
+  const cw = stage.clientWidth, ch = stage.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (glc.width !== Math.round(cw * dpr) || glc.height !== Math.round(ch * dpr)) {
+    R.renderer.setPixelRatio(dpr); R.renderer.setSize(cw, ch, false); ov.width = Math.round(cw * dpr); ov.height = Math.round(ch * dpr);
+    stage.style.setProperty('--ar', (W / Hh).toFixed(4));
+  }
+  if (video.currentTime !== lastT) { lastT = video.currentTime; track(W, Hh); }
+  draw(W, Hh, cw, ch, dpr);
+}
+
+let faceLm = null;
+function track(W, Hh) {
+  const t0 = performance.now(), ts = Math.max(t0, lastTs + 1); lastTs = ts; frameNo++; fpsN++;
+  const T = THREE, fr = face.detectForVideo(video, ts);
+  dbg.frames++;
+  if (fr.facialTransformationMatrixes && fr.facialTransformationMatrixes.length) {
+    const m = new T.Matrix4().fromArray(fr.facialTransformationMatrixes[0].data), p = new T.Vector3(), q = new T.Quaternion(), s = new T.Vector3();
+    m.decompose(p, q, s);
+    if (!R.has) { R.pos.copy(p); R.quat.copy(q); R.scl.copy(s); R.has = true; }
+    else { const k = 0.55; R.pos.lerp(p, k); R.quat.slerp(q, k); R.scl.lerp(s, k); }
+    let jo = 0; const bs = fr.faceBlendshapes && fr.faceBlendshapes[0];
+    if (bs) for (const c of bs.categories) if (c.categoryName === 'jawOpen') jo = c.score;
+    R.jawA += (Math.min(dbg.forceJaw ?? jo, 1) * 0.5 - R.jawA) * 0.5;
+    faceLm = fr.faceLandmarks[0]; miss = 0; dbg.face = true; dbg.jaw = jo;
+  } else if (++miss > 8) { R.has = false; faceLm = null; dbg.face = false; }
+
+  const wantHands = S.layers.hand && frameNo % handEvery === 0;
+  if (wantHands) trackHands(W, Hh, ts);
+  else if (!S.layers.hand) { R.rigs.forEach(r => r.pts = null); dbg.hands = 0; }
+  const cost = performance.now() - t0; costAvg = costAvg ? costAvg * 0.9 + cost * 0.1 : cost;
+  handEvery = costAvg > 90 ? 3 : costAvg > 45 ? 2 : 1;
+  if (t0 - fpsT >= 1000) {
+    const fps = Math.round(fpsN * 1000 / (t0 - fpsT)); fpsN = 0; fpsT = t0; dbg.fps = fps;
+    if (R.has) setStatus('Tracking.', fps + ' frames per second'); else setStatus('Looking for a face…', 'Face the camera in good light.', true);
+  }
+}
+function trackHands(W, Hh, ts) {
+  const T = THREE, hr = dbg.fakeHands || hands.detectForVideo(video, ts + 0.5);
+  const n = hr.landmarks ? hr.landmarks.length : 0; dbg.hands = n;
+  for (let i = 0; i < 2; i++) {
+    const rig = R.rigs[i];
+    if (i >= n) { rig.pts = null; continue; }
+    // MediaPipe labels handedness for a mirrored image; the raw camera frame is not mirrored, so swap.
+    const label = hr.handedness && hr.handedness[i] && hr.handedness[i][0] ? hr.handedness[i][0].categoryName : 'Right';
+    const left = dbg.fakeHands ? label === 'Left' : label === 'Right';
+    const pts = hr.landmarks[i].map(l => new T.Vector3(l.x * W, -l.y * Hh, -l.z * W));
+    if (rig.pts && rig.left === left && rig.pts[0].distanceTo(pts[0]) < W * 0.2) for (let j = 0; j < 21; j++) rig.pts[j].lerp(pts[j], 0.6); else rig.pts = pts;
+    rig.left = left;
+  }
+}
+
+function poseHand(rig) {
+  const T = THREE, L = rig.pts, H = R.M.hand, sgn = rig.left ? -1 : 1;
+  const a = L[5].clone().sub(L[0]), b = L[17].clone().sub(L[0]), n = a.clone().cross(b).normalize().multiplyScalar(sgn);
+  const t5 = new T.Vector3().fromArray(H.t5), t17 = new T.Vector3().fromArray(H.t17), nt = new T.Vector3().fromArray(H.nt);
+  const Bt = new T.Matrix3().set(t5.x, t17.x, nt.x * t5.length(), t5.y, t17.y, nt.y * t5.length(), t5.z, t17.z, nt.z * t5.length());
+  const Br = new T.Matrix3().set(a.x, b.x, n.x * a.length(), a.y, b.y, n.y * a.length(), a.z, b.z, n.z * a.length());
+  const A = Br.multiply(Bt.invert()).elements;
+  rig.palm.matrix.set(A[0], A[3], A[6], L[0].x, A[1], A[4], A[7], L[0].y, A[2], A[5], A[8], L[0].z, 0, 0, 0, 1);
+  const sc = Math.max(a.length() / t5.length(), b.length() / t17.length(), L[5].distanceTo(L[17]) / t5.distanceTo(t17));
+  const u = L[5].clone().sub(L[17]).normalize();
+  H.free.forEach((d, i) => {
+    const p0 = L[d.a], y = L[d.b].clone().sub(p0), seg = y.length() || 1; y.divideScalar(seg);
+    const x = u.clone().addScaledVector(y, -u.dot(y)); if (x.lengthSq() < 1e-6) x.set(1, 0, 0); x.normalize();
+    const z = x.clone().cross(y).multiplyScalar(sgn), ky = seg / d.len * 0.95, o = p0.clone().addScaledVector(y, seg * 0.025);
+    rig.free[i].matrix.set(x.x * sc, y.x * ky, z.x * sc, o.x, x.y * sc, y.y * ky, z.y * sc, o.y, x.z * sc, y.z * ky, z.z * sc, o.z, 0, 0, 0, 1);
+  });
+}
+
+const mx = x => mirrored ? 1 - x : x;
+function draw(W, Hh, cw, ch, dpr) {
+  drawFrame(W, Hh, cw, ch, dpr);
+  if (snap) { snap = false; savePhoto(W, Hh); }
+}
+function drawFrame(W, Hh, cw, ch, dpr) {
+  const T = THREE, { renderer, scene, cam, hscene, hcam, head, fit, jaw } = R, L = S.layers, f = S.fit;
+  cam.aspect = W / Hh; cam.updateProjectionMatrix();
+  hcam.left = 0; hcam.right = W; hcam.top = 0; hcam.bottom = -Hh; hcam.updateProjectionMatrix();
+  head.visible = R.has; if (R.has) head.matrix.compose(R.pos, R.quat, R.scl);
+  fit.scale.set(f.size * f.w, f.size * f.h, f.size * f.d);
+  fit.position.set(PIVOT[0] * (1 - fit.scale.x) + f.x, PIVOT[1] * (1 - fit.scale.y) + f.y, PIVOT[2] * (1 - fit.scale.z) + f.z);
+  jaw.rotation.x = R.jawA;
+  for (const rig of R.rigs) { rig.g.visible = !!rig.pts && L.hand; if (rig.g.visible) poseHand(rig); }
+  for (const m of R.meshes) m.visible = !!L[m.userData.layer];
+  const xray = S.look === 'xray';
+  glc.style.opacity = xray ? 1 : 1 - 0.8 * S.mix;
+  renderer.clear();
+  const pass = () => { renderer.render(scene, cam); renderer.clearDepth(); renderer.render(hscene, hcam); renderer.clearDepth(); };
+  if (xray) {
+    R.sil.opacity = (1 - S.mix) * 0.85;
+    if (R.sil.opacity > 0.01) { for (const m of R.meshes) m.material = R.sil; pass(); }
+    for (const m of R.meshes) { const x = R.mats[m.userData.layer].x; x.uniforms.gain.value = S.bright * ({ brain: 0.6, muscles: 0.55, hand: 1.3 }[m.userData.layer] || 1); m.material = x; }
+    pass();
+  } else { for (const m of R.meshes) m.material = R.mats[m.userData.layer].s; pass(); }
+
+  // 2D overlay: outline and labels (drawn un-mirrored so the text reads correctly)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, ch);
+  if (!R.has) return;
+  if (L.outline && faceLm) {
+    ctx.beginPath(); OVAL.forEach((i, k) => { const p = faceLm[i], x = mx(p.x) * cw, y = p.y * ch; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath();
+    ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(110,170,255,.28)'; ctx.lineWidth = Math.max(5, cw * 0.01); ctx.stroke();
+    ctx.strokeStyle = 'rgba(170,215,255,.85)'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  if (!S.labels) return;
+  scene.updateMatrixWorld();
+  const v = new T.Vector3(), items = [];
+  const c0 = v.set(0, 0, 0).applyMatrix4(fit.matrixWorld).project(cam), cx = mx((c0.x + 1) / 2) * cw;
+  const e1 = new T.Vector3(-8, 0, -2).applyMatrix4(fit.matrixWorld).project(cam), e2 = new T.Vector3(8, 0, -2).applyMatrix4(fit.matrixWorld).project(cam);
+  const half = Math.abs(e1.x - e2.x) / 4 * cw;
+  for (const lb of R.M.labels) {
+    if (!L[lb.layer]) continue;
+    v.fromArray(lb.p).applyMatrix4(lb.jaw ? new T.Matrix4().multiplyMatrices(jaw.matrixWorld, new T.Matrix4().makeTranslation(-R.M.jawPivot[0], -R.M.jawPivot[1], -R.M.jawPivot[2])) : fit.matrixWorld).project(cam);
+    items.push({ name: lb.name, x: mx((v.x + 1) / 2) * cw, y: (1 - (v.y + 1) / 2) * ch });
+  }
+  const fs = Math.max(9.5, Math.min(13, cw / 70)), gap = fs * 1.35;
+  ctx.font = `${fs}px ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif`; ctx.textBaseline = 'middle';
+  const cols = { '-1': items.filter(it => it.x < cx), '1': items.filter(it => it.x >= cx) };
+  for (const [from, to] of [['-1', '1'], ['1', '-1']]) while (cols[from].length > cols[to].length + 1) {
+    cols[from].sort((p, q) => Math.abs(q.x - cx) - Math.abs(p.x - cx)); cols[to].push(cols[from].pop()); }
+  for (const side of [-1, 1]) {
+    const col = cols[side].sort((p, q) => p.y - q.y); if (!col.length) continue;
+    const tw = Math.max(...col.map(it => ctx.measureText(it.name).width)) + 8;
+    const lx = side > 0 ? Math.max(tw > cw / 2 ? cw - tw : 0, Math.min(cw - tw, cx + half * 1.25 + 26)) : Math.min(tw > cw / 2 ? tw : cw, Math.max(tw, cx - half * 1.25 - 26));
+    const mean = col.reduce((a, it) => a + it.y, 0) / col.length;
+    let y = Math.max(gap, Math.min(mean - gap * (col.length - 1) / 2, ch - gap * col.length));
+    for (const it of col) {
+      it.ly = y; y += gap;
+      ctx.strokeStyle = 'rgba(235,244,255,.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(it.x, it.y); ctx.lineTo(lx, it.ly); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(it.x, it.y, 2, 0, 6.3); ctx.fill();
+      ctx.textAlign = side > 0 ? 'left' : 'right';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(2,6,14,.8)'; ctx.strokeText(it.name, lx + side * 4, it.ly);
+      ctx.fillStyle = '#f2f7ff'; ctx.fillText(it.name, lx + side * 4, it.ly);
+    }
+  }
+}
+</script>
+</body>
+</html>
