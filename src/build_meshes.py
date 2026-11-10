@@ -9,6 +9,7 @@ OUT = sys.argv[4]
 # ---- alignment: BodyParts3D (mm; +x subject left, -y forward, +z up) -> MediaPipe canonical face (cm; +x left, +y up, +z forward)
 X0 = -0.6
 SX, SY, SZ = 1.06, 1.166, 1.06
+S_TOP = 1.06
 
 
 def load(i):
@@ -68,7 +69,8 @@ ANCH_Y, ANCH_Z = 2.62, 4.1
 def to_canon(p):
     q = np.empty_like(p)
     q[:, 0] = (p[:, 0] - X0) * 0.1 * SX
-    q[:, 1] = (p[:, 2] - eye_c[2]) * 0.1 * SY + ANCH_Y
+    dz = (p[:, 2] - eye_c[2]) * 0.1
+    q[:, 1] = np.where(dz < 0, dz * SY, dz * S_TOP) + ANCH_Y   # stretch the short lower face only; keep the cranium near true size
     q[:, 2] = -(p[:, 1] - cornea_y) * 0.1 * SZ + ANCH_Z
     return q
 

@@ -134,8 +134,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <div class="row"><label for="f-x">Left / right</label><output id="o-f-x"></output><input type="range" id="f-x" min="-3" max="3" step="0.1"></div>
       <div class="row"><label for="f-y">Up / down</label><output id="o-f-y"></output><input type="range" id="f-y" min="-3" max="3" step="0.1"></div>
       <div class="row"><label for="f-z">Forward / back</label><output id="o-f-z"></output><input type="range" id="f-z" min="-3" max="3" step="0.1"></div>
+      <div class="tools" style="justify-content:flex-start;margin-top:12px"><button type="button" id="autofit" disabled>Auto-fit to my face</button></div>
       <button type="button" class="link" id="reset">Reset fit</button>
-      <p class="tip">To line it up, pick Solid, set &ldquo;Real me showing through&rdquo; to about half, then adjust until the eye sockets sit on your eyes and the chin on your chin.</p>
+      <p class="tip">Auto-fit measures your face width and height: look straight at the camera with your mouth closed and press it. To fine-tune by hand, pick Solid, set &ldquo;Real me showing through&rdquo; to about half, then adjust until the eye sockets sit on your eyes and the chin on your chin.</p>
     </fieldset>
   </div>
 </div>
@@ -159,7 +160,7 @@ const S = JSON.parse(JSON.stringify(DEF));
 try {
   const saved = JSON.parse(localStorage.getItem('xray-mirror') || 'null');
   if (saved) { Object.assign(S.layers, saved.layers); Object.assign(S.fit, saved.fit);
-    for (const k of ['labels', 'look', 'bright', 'mix']) if (k in saved) S[k] = saved[k]; }
+    for (const k of ['labels', 'look', 'bright', 'mix', 'fitted']) if (k in saved) S[k] = saved[k]; }
 } catch (e) {}
 const save = () => { try { localStorage.setItem('xray-mirror', JSON.stringify(S)); } catch (e) {} };
 
@@ -179,7 +180,8 @@ $('labels').addEventListener('change', e => { S.labels = e.target.checked; save(
 for (const [id, o, k, f] of SL) $(id).addEventListener('input', e => { o[k] = +e.target.value; $('o-' + id).textContent = f(o[k]); save(); });
 $('look-xray').addEventListener('click', () => { S.look = 'xray'; syncUI(); save(); });
 $('look-solid').addEventListener('click', () => { S.look = 'solid'; syncUI(); save(); });
-$('reset').addEventListener('click', () => { Object.assign(S.fit, DEF.fit); syncUI(); save(); });
+$('reset').addEventListener('click', () => { Object.assign(S.fit, DEF.fit); S.fitted = false; syncUI(); save(); });
+$('autofit').addEventListener('click', () => { autoFit = { n: 0, w: 0, h: 0 }; });
 const PRESET = { skull: ['skull', 'outline', 'hand'], brain: ['brain', 'outline', 'hand'], muscles: ['muscles', 'eyes', 'outline', 'hand'], all: Object.keys(DEF.layers) };
 document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
   for (const k in S.layers) S.layers[k] = PRESET[b.dataset.preset].includes(k); syncUI(); save(); }));
@@ -233,7 +235,8 @@ $('start').addEventListener('click', async () => {
     R = buildRenderer();
     $('cover').hidden = true; $('cover').style.display = 'none';
     setStatus('Tracking.', 'Open your mouth, turn your head, hold up a hand.');
-    $('photo').disabled = false;
+    $('photo').disabled = false; $('autofit').disabled = false;
+    if (!S.fitted) autoFit = { n: 0, w: 0, h: 0 };
     try { const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); $('flip').hidden = cams.length < 2; } catch (e) {}
     loop();
   } catch (e) {
@@ -339,7 +342,7 @@ function loop() {
   draw(W, Hh, cw, ch, dpr);
 }
 
-let faceLm = null;
+let faceLm = null, jawBase = 1.389, autoFit = null;
 function track(W, Hh) {
   const t0 = performance.now(), ts = Math.max(t0, lastTs + 1); lastTs = ts; frameNo++; fpsN++;
   const T = THREE, fr = face.detectForVideo(video, ts);
@@ -351,8 +354,14 @@ function track(W, Hh) {
     else { const k = 0.55; R.pos.lerp(p, k); R.quat.slerp(q, k); R.scl.lerp(s, k); }
     let jo = 0; const bs = fr.faceBlendshapes && fr.faceBlendshapes[0];
     if (bs) for (const c of bs.categories) if (c.categoryName === 'jawOpen') jo = c.score;
-    R.jawA += (Math.min(dbg.forceJaw ?? jo, 1) * 0.5 - R.jawA) * 0.5;
     faceLm = fr.faceLandmarks[0]; miss = 0; dbg.face = true; dbg.jaw = jo;
+    // Jaw angle from how far the chin has dropped below the nose, so parting the lips with the teeth closed does not open the jaw.
+    const P = i => new T.Vector3(faceLm[i].x * W, faceLm[i].y * Hh, faceLm[i].z * W);
+    const nose = P(2), r = P(152).distanceTo(nose) / (P(168).distanceTo(nose) || 1);
+    if (r < jawBase) jawBase += (r - jawBase) * 0.3; else if (jo < 0.04) jawBase += (r - jawBase) * 0.08;
+    let ang = jo < 0.03 ? 0 : Math.max(0, r - jawBase - 0.015) / 1.29;
+    if (dbg.forceJaw != null) ang = dbg.forceJaw * 0.5;
+    R.jawA += (Math.min(ang, 0.55) - R.jawA) * 0.5; dbg.jawAngle = R.jawA; dbg.jawBase = jawBase;
   } else if (++miss > 8) { R.has = false; faceLm = null; dbg.face = false; }
 
   const wantHands = S.layers.hand && frameNo % handEvery === 0;
@@ -399,6 +408,20 @@ function poseHand(rig) {
 }
 
 const mx = x => mirrored ? 1 - x : x;
+// Compare the tracked face's width and height with the reference face model in the same pose, then scale the anatomy to match.
+const REF = { 10: [0, 8.261778, 4.481535], 152: [0, -9.403378, 4.264492], 234: [-7.664182, 0.673132, -2.435867], 454: [7.664182, 0.673132, -2.435867] };
+function measureFit(W, Hh) {
+  const T = THREE, v = new T.Vector3(), ref = {}, me = {};
+  for (const i in REF) { v.fromArray(REF[i]).applyMatrix4(R.head.matrix).project(R.cam); ref[i] = [(v.x + 1) / 2 * W, (1 - v.y) / 2 * Hh]; me[i] = [faceLm[i].x * W, faceLm[i].y * Hh]; }
+  const d = (o, a, b) => Math.hypot(o[a][0] - o[b][0], o[a][1] - o[b][1]);
+  const yaw = Math.abs(d(me, 234, 152) - d(me, 454, 152)) / (d(me, 234, 454) || 1);
+  if (yaw > 0.12 || dbg.jaw > 0.15) { setStatus('Auto-fit:', 'look straight at the camera with your mouth closed.', true); return; }
+  autoFit.w += d(me, 234, 454) / d(ref, 234, 454); autoFit.h += d(me, 10, 152) / d(ref, 10, 152);
+  if (++autoFit.n < 20) return;
+  const cl = x => Math.round(Math.max(0.85, Math.min(1.2, x)) * 100) / 100;
+  S.fit.w = cl(autoFit.w / autoFit.n); S.fit.h = cl(autoFit.h / autoFit.n); S.fitted = true; autoFit = null; dbg.fit = { w: S.fit.w, h: S.fit.h };
+  syncUI(); save(); setStatus('Auto-fit done.', 'Use the sliders to fine-tune.');
+}
 function draw(W, Hh, cw, ch, dpr) {
   drawFrame(W, Hh, cw, ch, dpr);
   if (snap) { snap = false; savePhoto(W, Hh); }
@@ -427,6 +450,7 @@ function drawFrame(W, Hh, cw, ch, dpr) {
   // 2D overlay: outline and labels (drawn un-mirrored so the text reads correctly)
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, ch);
   if (!R.has) return;
+  if (autoFit && faceLm) measureFit(W, Hh);
   if (L.outline && faceLm) {
     ctx.beginPath(); OVAL.forEach((i, k) => { const p = faceLm[i], x = mx(p.x) * cw, y = p.y * ch; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath();
     ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(110,170,255,.28)'; ctx.lineWidth = Math.max(5, cw * 0.01); ctx.stroke();
