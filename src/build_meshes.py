@@ -8,7 +8,7 @@ OUT = sys.argv[4]
 
 # ---- alignment: BodyParts3D (mm; +x subject left, -y forward, +z up) -> MediaPipe canonical face (cm; +x left, +y up, +z forward)
 X0 = -0.6
-SX, SY, SZ = 1.06, 1.166, 1.06
+SX, SY, SZ = 1.06, 1.24, 1.06   # SY applies below eye level and brings the bony chin to about 0.7 cm inside the reference chin
 S_TOP = 1.06
 
 

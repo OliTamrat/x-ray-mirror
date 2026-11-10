@@ -20,7 +20,7 @@ then open `http://localhost:8000/`.
 
 - **Layers**: skull, brain, muscles, eyes, face outline, hand bones, and labels.
 - **Look**: X-ray or Solid, brightness, and how much of the real image shows through.
-- **Fit to my head**: **Auto-fit to my face** measures your face width and height (it also runs once on first use); sliders adjust size, width, height, depth and position. The anatomy is one adult's, so most people need a small adjustment. Settings are remembered in the browser.
+- **Fit to my head**: **Auto-fit to my face** measures your face width and eyes-to-chin length (it also runs once on first use); sliders adjust size, width, height, eyes-to-chin length, depth and position. The anatomy is one adult's, so most people need a small adjustment. Settings are remembered in the browser.
 - **Save photo**, **Switch camera** (when the device has more than one), and **Full screen** (where the browser supports it).
 
 ## Test status
