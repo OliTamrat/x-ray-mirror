@@ -41,6 +41,13 @@ h1{font-size:17px;font-weight:650;letter-spacing:.02em;margin:0}
 #card .good{color:#9be7b0}#card .bad{color:var(--warn)}
 #card .big{font-size:18px;font-weight:650;margin:0 0 4px}
 .stage{cursor:pointer}
+.stage video,#bg{transform-origin:0 0}
+.focusbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center}
+.focusbar .seg{flex:0 1 auto;justify-content:center}
+.focusbar .seg button{flex:0 0 auto;min-height:38px}
+.zoomer{display:flex;align-items:center;gap:6px}
+.zoomer button{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;width:40px;min-height:38px;font-size:18px;line-height:1}
+.zoomer output{font:12px var(--mono);color:var(--muted);min-width:44px;text-align:center}
 .tools{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
 .tools button{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:8px 14px;min-height:40px}
 .tools button:disabled{opacity:.45;cursor:default}
@@ -100,6 +107,17 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
         <p id="covertext">Sit facing the camera in good light. The first start downloads the tracking models (about 12 MB), so it needs an internet connection.</p>
       </div>
     </div>
+    <div class="focusbar" id="focusbar">
+      <div class="seg" id="focus">
+        <button type="button" data-focus="whole">Whole view</button>
+        <button type="button" data-focus="head">Head</button>
+        <button type="button" data-focus="chest">Chest</button>
+        <button type="button" data-focus="abdomen">Abdomen</button>
+        <button type="button" data-focus="arm">Arm</button>
+        <button type="button" data-focus="leg">Leg</button>
+      </div>
+      <div class="zoomer"><button type="button" id="zout" aria-label="Zoom out">&minus;</button><output id="zval">100%</output><button type="button" id="zin" aria-label="Zoom in">+</button></div>
+    </div>
     <div class="tools">
       <button type="button" id="photo" disabled>Save photo</button>
       <button type="button" id="flip" hidden>Switch camera</button>
@@ -109,7 +127,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <section class="learn" id="learn">
       <div class="learnhead">
         <div class="seg"><button type="button" id="lang-en" aria-pressed="true">English</button><button type="button" id="lang-om" aria-pressed="false">Afaan Oromo</button></div>
-        <button type="button" class="act" id="quiz">Quiz me</button>
+        <span><button type="button" class="act" id="reveal" hidden>Show me</button> <button type="button" class="act" id="quiz">Quiz me</button></span>
       </div>
       <div id="card" aria-live="polite"></div>
     </section>
@@ -253,7 +271,7 @@ const INFO = {
 };
 
 /* ---------- settings ---------- */
-const DEF = { lang: 'en', mode: 'head', layers: { skull: true, organs: true, brain: true, muscles: false, eyes: true, outline: true, hand: true }, labels: true, look: 'xray', bright: 1, mix: 0.5,
+const DEF = { lang: 'en', focus: 'whole', zoom: 1, mode: 'head', layers: { skull: true, organs: true, brain: true, muscles: false, eyes: true, outline: true, hand: true }, labels: true, look: 'xray', bright: 1, mix: 0.5,
   fit: { size: 1, w: 1, h: 1, j: 1, d: 1, x: 0, y: 0, z: 0 } };
 const S = JSON.parse(JSON.stringify(DEF));
 try {
@@ -270,6 +288,8 @@ const SL = [['bright', S, 'bright', pct], ['mix', S, 'mix', pct], ['f-size', S.f
 function syncUI() {
   for (const k in S.layers) $('l-' + k).checked = S.layers[k];
   $('labels').checked = S.labels;
+  document.querySelectorAll('[data-focus]').forEach(b => { const f = b.dataset.focus; b.hidden = S.mode !== 'body' && !['whole', 'head'].includes(f); b.setAttribute('aria-pressed', S.focus === f); });
+  $('zval').textContent = Math.round(S.zoom * 100) + '%';
   $('lang-en').setAttribute('aria-pressed', S.lang === 'en'); $('lang-om').setAttribute('aria-pressed', S.lang === 'om');
   $('mode-head').setAttribute('aria-pressed', S.mode === 'head'); $('mode-body').setAttribute('aria-pressed', S.mode === 'body');
   $('modetip').textContent = S.mode === 'body' ? 'Whole skeleton and organs. Stand back, or use the back camera on someone else, so the camera sees the body from head to feet.' : 'Close-up view: skull, brain, face muscles and hand bones.';
@@ -287,6 +307,10 @@ $('autofit').addEventListener('click', () => { autoFit = { n: 0, w: 0, b: 0 }; }
 const PRESET = { skull: ['skull', 'outline', 'hand'], organs: ['organs', 'outline', 'hand'], brain: ['brain', 'outline', 'hand'], muscles: ['muscles', 'eyes', 'outline', 'hand'], all: Object.keys(DEF.layers) };
 document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
   for (const k in S.layers) S.layers[k] = PRESET[b.dataset.preset].includes(k); syncUI(); save(); }));
+const ZSTEPS = [1, 1.5, 2, 3, 4];
+document.querySelectorAll('[data-focus]').forEach(b => b.addEventListener('click', () => { S.focus = b.dataset.focus; S.zoom = 1; syncUI(); }));
+$('zin').addEventListener('click', () => { S.zoom = ZSTEPS[Math.min(ZSTEPS.length - 1, ZSTEPS.indexOf(S.zoom) + 1)]; syncUI(); });
+$('zout').addEventListener('click', () => { S.zoom = ZSTEPS[Math.max(0, ZSTEPS.indexOf(S.zoom) - 1)]; syncUI(); });
 syncUI();
 
 const statusEl = $('status');
@@ -318,9 +342,9 @@ let sel = null, selPart = -1, quiz = null, flash = null, lastItems = [];
 const disp = name => S.lang === 'om' && INFO[name] ? INFO[name][3] : name;
 function renderCard() {
   const card = $('card'), el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  card.replaceChildren(); $('quiz').textContent = quiz ? 'End quiz' : 'Quiz me';
+  card.replaceChildren(); $('quiz').textContent = quiz ? 'End quiz' : 'Quiz me'; $('reveal').hidden = !quiz;
   if (quiz) {
-    card.append(el('p', 'tip', 'Labels are hidden. Tap the place on the picture where this is:'), el('p', 'big', disp(quiz.target)));
+    card.append(el('p', 'tip', 'Labels are hidden. Tap anywhere on this part in the picture. Use the Focus buttons under the picture to zoom into a region.'), el('p', 'big', disp(quiz.target)));
     if (quiz.msg) card.append(el('p', quiz.good ? 'good' : 'bad', quiz.msg));
     card.append(el('p', 'tip', 'Score: ' + quiz.score + ' of ' + quiz.asked));
     return;
@@ -341,22 +365,48 @@ function nextQuestion() {
 $('quiz').addEventListener('click', () => { if (quiz) { quiz = null; renderCard(); } else { sel = null; selPart = -1; quiz = { target: null, score: 0, asked: 0, msg: '' }; nextQuestion(); } });
 $('lang-en').addEventListener('click', () => { S.lang = 'en'; syncUI(); save(); renderCard(); });
 $('lang-om').addEventListener('click', () => { S.lang = 'om'; syncUI(); save(); renderCard(); });
+$('reveal').addEventListener('click', () => {
+  if (!quiz || !quiz.target) return;
+  const it = lastItems.find(i => i.key === quiz.target);
+  flash = { name: quiz.target, part: it && it.part != null ? it.part : -1, until: performance.now() + 2500 };
+  quiz.good = true; quiz.msg = 'Here it is.'; renderCard(); setTimeout(() => { if (quiz) nextQuestion(); }, 2500);
+});
+// Which structures lie under a tap. In the full-body view this tests the real shapes, so a tap anywhere on an organ or bone counts.
+function candidatesAt(x, y, cw, ch) {
+  const T = THREE, B = R.body;
+  if (!(S.mode === 'body' && pose && B.lm)) return [];
+  const ray = new T.Raycaster(); ray.setFromCamera(new T.Vector2((mirrored ? 1 - x / cw : x / cw) * 2 - 1, 1 - 2 * y / ch), R.hcam);
+  ray.ray.origin.z += 5000;   // start in front of everything; the flat view's ray otherwise starts mid-scene
+  const inv = new T.Matrix4(), loc = new T.Vector3(), lp = new T.Vector3(), best = new Map();
+  for (const h of ray.intersectObjects(B.parts.filter(P => P.m.visible).map(P => P.m), false)) {
+    const idx = h.object.userData.idx, P = B.parts[idx]; let li = idx, flip = false;
+    if (!B.labelsOf[li].length && B.twin[idx] >= 0) { li = B.twin[idx]; flip = true; }
+    loc.copy(h.point).applyMatrix4(inv.copy(P.m.matrix).invert()); if (flip) loc.x = -loc.x;
+    for (const lb of B.labelsOf[li]) { const d = loc.distanceTo(lp.fromArray(lb.p)), cur = best.get(idx); if (!cur || d < cur.d) best.set(idx, { key: lb.name, part: idx, d, size: P.size }); }
+  }
+  const out = [...best.values()], hm = R.meshes.filter(m => m.userData.head && m.visible);
+  if (R.bodyHead.visible && hm.length && ray.intersectObjects(hm, false).length) out.push({ key: 'Skull', part: -1, size: 1e6 });
+  return out.filter(c => lastItems.some(it => it.key === c.key)).sort((a, b) => a.size - b.size);   // smallest structure first: the most specific answer
+}
 $('stage').addEventListener('click', e => {
   if (!R || !lastItems.length) return;
   const r = $('stage').getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
-  let best = null, bd = 1e9;
+  let near = null, nd = 1e9, lab = null, ld = 1e9;
   for (const it of lastItems) {
-    let d = Math.hypot(x - it.x, y - it.y);
-    if (it.drawn && !quiz) { const x0 = Math.min(it.lx, it.lx + it.side * it.tw), dx = Math.max(x0 - x, 0, x - x0 - it.tw), dy = Math.max(Math.abs(y - it.ly) - 8, 0); d = Math.min(d, Math.hypot(dx, dy)); }
-    if (d < bd) { bd = d; best = it; }
+    const d = Math.hypot(x - it.x, y - it.y); if (d < nd) { nd = d; near = it; }
+    if (it.drawn && !quiz) { const x0 = Math.min(it.lx, it.lx + it.side * it.tw), dx = Math.max(x0 - x, 0, x - x0 - it.tw), dy = Math.max(Math.abs(y - it.ly) - 8, 0), dl = Math.hypot(dx, dy); if (dl < ld) { ld = dl; lab = it; } }
   }
+  const cands = candidatesAt(x, y, r.width, r.height); dbg.cands = cands.map(c => c.key);
   if (quiz) {
-    if (!best || bd > 80) return;
-    if (best.key === quiz.target) { quiz.score++; quiz.good = true; quiz.msg = 'Correct.'; flash = { name: best.key, until: performance.now() + 1400 }; renderCard(); setTimeout(() => { if (quiz) nextQuestion(); }, 1400); }
-    else { quiz.good = false; quiz.msg = 'That is: ' + disp(best.key) + '. Try again.'; flash = { name: best.key, until: performance.now() + 1400 }; renderCard(); }
+    const tIt = lastItems.find(it => it.key === quiz.target), dT = tIt ? Math.hypot(x - tIt.x, y - tIt.y) : 1e9;
+    const right = cands.some(c => c.key === quiz.target) || dT <= Math.max(34, 1.5 * nd);
+    const guess = cands[0] ? cands[0] : nd < 80 ? near : null;
+    if (right) { quiz.score++; quiz.good = true; quiz.msg = 'Correct.'; flash = { name: quiz.target, part: tIt && tIt.part != null ? tIt.part : -1, until: performance.now() + 1400 }; renderCard(); setTimeout(() => { if (quiz) nextQuestion(); }, 1400); }
+    else if (guess) { quiz.good = false; quiz.msg = 'That is: ' + disp(guess.key) + '. Try again.'; flash = { name: guess.key, part: guess.part != null ? guess.part : -1, until: performance.now() + 1400 }; renderCard(); }
     return;
   }
-  if (best && bd < 36) { sel = best.key; selPart = best.part == null ? -1 : best.part; } else { sel = null; selPart = -1; }
+  const hit = lab && ld < 6 ? lab : cands[0] ? cands[0] : nd < 36 ? near : null;
+  sel = hit ? hit.key : null; selPart = hit && hit.part != null ? hit.part : -1;
   renderCard();
 });
 renderCard();
@@ -414,7 +464,7 @@ if (screenEl.requestFullscreen && document.fullscreenEnabled) {
 function savePhoto(W, Hh) {
   const c = document.createElement('canvas'); c.width = W; c.height = Hh; const g = c.getContext('2d');
   g.save(); if (mirrored) { g.translate(W, 0); g.scale(-1, 1); }
-  g.drawImage(bg.width ? bg : video, 0, 0, W, Hh); g.globalAlpha = +glc.style.opacity || 1; g.drawImage(glc, 0, 0, W, Hh); g.restore();
+  g.drawImage(bg.width ? bg : video, Z.x0, Z.y0, W / Z.zz, Hh / Z.zz, 0, 0, W, Hh); g.globalAlpha = +glc.style.opacity || 1; g.drawImage(glc, 0, 0, W, Hh); g.restore();
   g.drawImage(ov, 0, 0, W, Hh);
   dbg.lastPhoto = c;
   c.toBlob(b => { if (!b) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'xray-mirror.png';
@@ -441,7 +491,7 @@ function applyMode() {
   for (const m of R.meshes) if (m.userData.head) m.userData.ortho = body;
 }
 async function setMode(m) {
-  S.mode = m; syncUI(); save();
+  S.mode = m; S.focus = 'whole'; S.zoom = 1; syncUI(); save();
   if (!R) return;
   if (m === 'body' && !pose) {
     setStatus('Loading body tracking…', 'about 9 MB the first time');
@@ -514,12 +564,14 @@ function buildRenderer() {
   const V3 = a => new THREE.Vector3().fromArray(a);
   const bparts = BM.parts.map(d => {
     const mt = d.col ? matSet(d.col[1], d.col[0], 0.09, 0.75) : mats.bone, m = new THREE.Mesh(geo(d.mesh), mt.xo);
-    m.matrixAutoUpdate = false; m.frustumCulled = false; m.userData = { layer: d.layer, mat: mt, ortho: true, body: true, pi: d.col ? BM.parts.indexOf(d) : -2 }; meshes.push(m); bodyRoot.add(m);
-    return { d, m, ti: d.ti && V3(d.ti), tj: d.tj && V3(d.tj) };
+    m.matrixAutoUpdate = false; m.frustumCulled = false; m.userData = { layer: d.layer, mat: mt, ortho: true, body: true, idx: BM.parts.indexOf(d), pi: d.col ? BM.parts.indexOf(d) : -2 };
+    m.geometry.computeBoundingSphere(); meshes.push(m); bodyRoot.add(m);
+    return { d, m, ti: d.ti && V3(d.ti), tj: d.tj && V3(d.tj), size: m.geometry.boundingSphere.radius };
   });
-  const body = { parts: bparts, lm: null, vis: null, miss: 0, T: { shL: V3(BM.torso.shL), shR: V3(BM.torso.shR), hipL: V3(BM.torso.hipL), hipR: V3(BM.torso.hipR), neck: V3(BM.torso.neck) },
+  const camFull = cam.clone();
+  const body = { labelsOf: BM.parts.map((d, i) => BM.labels.filter(l => l.part === i)), twin: BM.parts.map(d => d.id.endsWith('_right') ? BM.parts.findIndex(e => e.id === d.id.replace('_right', '_left')) : -1), boxes: {}, parts: bparts, lm: null, vis: null, miss: 0, T: { shL: V3(BM.torso.shL), shR: V3(BM.torso.shR), hipL: V3(BM.torso.hipL), hipR: V3(BM.torso.hipR), neck: V3(BM.torso.neck) },
     H: { atlas: V3(BM.head.atlas), earL: V3(BM.head.earL), earR: V3(BM.head.earR), nose: V3(BM.head.nose) }, torsoM: new THREE.Matrix4(), scale: 1, ok: {} };
-  return { renderer, scene, cam, hscene, hcam, head, fit, jaw, meshes, mats, sil, rigs, M, BM, body, bodyRoot, bodyHead,
+  return { renderer, scene, cam, camFull, hscene, hcam, head, fit, jaw, meshes, mats, sil, rigs, M, BM, body, bodyRoot, bodyHead,
     pos: new THREE.Vector3(), quat: new THREE.Quaternion(), scl: new THREE.Vector3(1, 1, 1), has: false, jawA: 0 };
 }
 
@@ -688,6 +740,41 @@ function poseBody() {
     }
     P.vis = vis;
   }
+  // regions the view can zoom into, as points in camera pixels
+  const px = p => [p.x, -p.y], tor = (x, y) => px(new T.Vector3(x, y, 60).applyMatrix4(B.torsoM)), hd = (x, y) => px(new T.Vector3(x, y, 2).applyMatrix4(R.fit.matrix).applyMatrix4(R.bodyHead.matrix));
+  const lms = ids => ids.filter(i => B.vis[i] > 0.35).map(i => px(L[i])), sum = ids => ids.reduce((a, i) => a + B.vis[i], 0);
+  const X = B.boxes;
+  X.head = ok.head ? [hd(-9, -11), hd(9, -11), hd(-9, 12), hd(9, 12), px(special.neck)] : lms([0, 7, 8]);
+  X.chest = [tor(-195, 215), tor(195, 215), tor(-195, 575), tor(195, 575)];
+  X.abdomen = [tor(-180, -110), tor(180, -110), tor(-180, 300), tor(180, 300)];
+  X.arm = lms(sum([11, 13, 15]) >= sum([12, 14, 16]) ? [11, 13, 15, 17, 19] : [12, 14, 16, 18, 20]);
+  X.leg = lms([23, 24, 25, 26, 27, 28, 29, 30, 31, 32]);
+  X.whole = [...X.head, ...X.chest, ...X.abdomen, ...lms([13, 14, 15, 16, 25, 26, 27, 28, 31, 32])];
+}
+// Zoom: a window of the camera frame, following the chosen region. Z.x0/y0 is its top-left corner in camera pixels, Z.z the magnification.
+const Z = { z: 1, cx: 0, cy: 0, x0: 0, y0: 0 };
+function updateZoom(W, Hh) {
+  const T = THREE, bodyOn = S.mode === 'body' && !!pose && !!R.body.lm; let pts = null;
+  if (bodyOn) { pts = R.body.boxes[S.focus]; if (!pts || pts.length < 2) pts = R.body.boxes.whole; }
+  else if (S.mode !== 'body' && R.has) {
+    R.scene.updateMatrixWorld(); const v = new T.Vector3(); pts = [];
+    for (const c of [[-9, -11, 2], [9, -11, 2], [-9, 12, 2], [9, 12, 2]]) { v.fromArray(c).applyMatrix4(R.fit.matrixWorld).project(R.camFull); pts.push([(v.x + 1) / 2 * W, (1 - v.y) / 2 * Hh]); }
+  }
+  let tz = S.focus === 'whole' ? S.zoom : 1, tx = W / 2, ty = Hh / 2;
+  if (pts && pts.length > 1) {
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), x1 = Math.min(...xs), x2 = Math.max(...xs), y1 = Math.min(...ys), y2 = Math.max(...ys);
+    tx = (x1 + x2) / 2; ty = (y1 + y2) / 2;
+    if (S.focus !== 'whole') tz = Math.min(W / ((x2 - x1) * 1.25 + 1), Hh / ((y2 - y1) * 1.25 + 1)) * S.zoom;
+  }
+  tz = Math.min(10, Math.max(1, tz));
+  if (!Z.cx) { Z.cx = tx; Z.cy = ty; }
+  const k = dbg.zoomNow ? 1 : 0.18; Z.z += (tz - Z.z) * k; Z.cx += (tx - Z.cx) * k; Z.cy += (ty - Z.cy) * k;
+  const on = Z.z > 1.01, z = on ? Z.z : 1, w = W / z, h = Hh / z;
+  Z.x0 = on ? Math.min(W - w, Math.max(0, Z.cx - w / 2)) : 0; Z.y0 = on ? Math.min(Hh - h, Math.max(0, Z.cy - h / 2)) : 0; Z.zz = z;
+  for (const c of [R.cam, R.hcam]) { if (on) c.setViewOffset(W, Hh, Z.x0, Z.y0, w, h); else if (c.view) { c.clearViewOffset(); } }
+  const tf = on ? `scale(${z}) translate(${-Z.x0 / W * 100}%, ${-Z.y0 / Hh * 100}%)` : '';
+  if (bg.style.transform !== tf) { bg.style.transform = tf; video.style.transform = tf; }
+  dbg.zoom = { z, x0: Z.x0, y0: Z.y0 };
 }
 function trackHands(W, Hh, ts) {
   const T = THREE, hr = dbg.fakeHands || hands.detectForVideo(video, ts + 0.5);
@@ -727,7 +814,7 @@ const mx = x => mirrored ? 1 - x : x;
 const REF = { 13: [0, -3.994436, 5.219482], 33: [-4.445859, 2.663991, 3.173422], 263: [4.445859, 2.663991, 3.173422], 152: [0, -9.403378, 4.264492], 234: [-7.664182, 0.673132, -2.435867], 454: [7.664182, 0.673132, -2.435867] };
 function measureFit(W, Hh) {
   const T = THREE, v = new T.Vector3(), ref = {}, me = {};
-  for (const i in REF) { v.fromArray(REF[i]).applyMatrix4(R.head.matrix).project(R.cam); ref[i] = [(v.x + 1) / 2 * W, (1 - v.y) / 2 * Hh]; me[i] = [faceLm[i].x * W, faceLm[i].y * Hh]; }
+  for (const i in REF) { v.fromArray(REF[i]).applyMatrix4(R.head.matrix).project(R.camFull); ref[i] = [(v.x + 1) / 2 * W, (1 - v.y) / 2 * Hh]; me[i] = [faceLm[i].x * W, faceLm[i].y * Hh]; }
   const d = (o, a, b) => Math.hypot(o[a][0] - o[b][0], o[a][1] - o[b][1]);
   const yaw = Math.abs(d(me, 234, 152) - d(me, 454, 152)) / (d(me, 234, 454) || 1);
   if (yaw > 0.12 || dbg.jaw > 0.15) { setStatus('Auto-fit:', 'look straight at the camera with your mouth closed.', true); return; }
@@ -745,7 +832,7 @@ function draw(W, Hh, cw, ch, dpr) {
 }
 function drawFrame(W, Hh, cw, ch, dpr) {
   const T = THREE, { renderer, scene, cam, hscene, hcam, head, fit, jaw } = R, L = S.layers, f = S.fit;
-  cam.aspect = W / Hh; cam.updateProjectionMatrix();
+  cam.aspect = W / Hh; cam.updateProjectionMatrix(); R.camFull.aspect = W / Hh; R.camFull.updateProjectionMatrix();
   hcam.left = 0; hcam.right = W; hcam.top = 0; hcam.bottom = -Hh; hcam.updateProjectionMatrix();
   head.visible = R.has; if (R.has) head.matrix.compose(R.pos, R.quat, R.scl);
   fit.scale.set(f.size * f.w, f.size * f.h, f.size * f.d);
@@ -758,6 +845,8 @@ function drawFrame(W, Hh, cw, ch, dpr) {
   for (const rig of R.rigs) if (bodyMode) rig.g.visible = false;
   for (const m of R.meshes) m.visible = !!L[m.userData.layer] && (!m.userData.body || bodyOn);
   if (bodyOn) for (const P of R.body.parts) P.m.visible = P.m.visible && P.vis;
+  updateZoom(W, Hh);
+  const ZX = p => (p - Z.x0) * Z.zz / W, ZY = p => (p - Z.y0) * Z.zz / Hh, tnow = performance.now(), fPart = flash && tnow < flash.until ? flash.part : -9;
   const xray = S.look === 'xray';
   glc.style.opacity = xray ? 1 : 1 - 0.8 * S.mix;
   renderer.clear();
@@ -765,7 +854,7 @@ function drawFrame(W, Hh, cw, ch, dpr) {
   if (xray) {
     R.sil.opacity = (1 - S.mix) * 0.85;
     if (R.sil.opacity > 0.01) { for (const m of R.meshes) m.material = R.sil; pass(); }
-    for (const m of R.meshes) { const mt = m.userData.mat, x = m.userData.ortho ? mt.xo : mt.x; x.uniforms.gain.value = S.bright * mt.gain * (m.userData.pi === selPart ? 2 : 1); m.material = x; }
+    for (const m of R.meshes) { const mt = m.userData.mat, x = m.userData.ortho ? mt.xo : mt.x; x.uniforms.gain.value = S.bright * mt.gain * (m.userData.pi === selPart || m.userData.pi === fPart ? 2.2 : 1); m.material = x; }
     pass();
   } else { for (const m of R.meshes) m.material = m.userData.mat.s; pass(); }
 
@@ -773,16 +862,16 @@ function drawFrame(W, Hh, cw, ch, dpr) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, ch);
   if (bodyMode) {
     if (!bodyOn) { lastItems = []; return; }
-    const v = new T.Vector3(), items = [], B = R.body, put = (name, p, part) => items.push({ key: name, part, x: mx(p.x / W) * cw, y: -p.y / Hh * ch });
+    const v = new T.Vector3(), items = [], B = R.body, put = (name, p, part) => items.push({ key: name, part, x: mx(ZX(p.x)) * cw, y: ZY(-p.y) * ch });
     for (const lb of R.BM.labels) { const P = B.parts[lb.part]; if (P.m.visible) put(lb.name, v.fromArray(lb.p).applyMatrix4(P.m.matrix), lb.part); }
     if (B.ok.head && L.skull) put('Skull', v.set(0, 9, 5).applyMatrix4(R.fit.matrix).applyMatrix4(R.bodyHead.matrix));
-    layoutLabels(items, mx(B.cx / W) * cw, B.half / W * cw * 1.6, cw, ch);
+    layoutLabels(items, mx(ZX(B.cx)) * cw, B.half / W * cw * 1.6, cw, ch);
     return;
   }
   if (!R.has) { lastItems = []; return; }
   if (autoFit && faceLm) measureFit(W, Hh);
   if (L.outline && faceLm) {
-    ctx.beginPath(); OVAL.forEach((i, k) => { const p = faceLm[i], x = mx(p.x) * cw, y = p.y * ch; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath();
+    ctx.beginPath(); OVAL.forEach((i, k) => { const p = faceLm[i], x = mx(ZX(p.x * W)) * cw, y = ZY(p.y * Hh) * ch; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath();
     ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(110,170,255,.28)'; ctx.lineWidth = Math.max(5, cw * 0.01); ctx.stroke();
     ctx.strokeStyle = 'rgba(170,215,255,.85)'; ctx.lineWidth = 1.5; ctx.stroke();
   }
@@ -801,6 +890,8 @@ function drawFrame(W, Hh, cw, ch, dpr) {
 }
 // Stack labels in a column on each side of the subject and draw a leader line to each anchor.
 function layoutLabels(items, cx, half, cw, ch) {
+  items = items.filter(it => it.x >= 0 && it.x <= cw && it.y >= 0 && it.y <= ch);   // only what is in view
+  if (Z.zz > 1.05) { cx = cw / 2; half = cw; }   // zoomed in: labels go to the edges
   const fs = Math.max(9.5, Math.min(13, cw / 70)), gap = fs * 1.35, now = performance.now(), showAll = S.labels && !quiz;
   ctx.font = `${fs}px ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif`; ctx.textBaseline = 'middle';
   for (const it of items) it.name = disp(it.key);

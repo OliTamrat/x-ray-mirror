@@ -32,7 +32,8 @@ then open `http://localhost:8000/`.
 ## Learning features
 
 - **Tap to learn**: tap a label or a dot on the picture to read what that part is, what it does and one thing worth knowing. There are 54 entries covering the head, skeleton and organs.
-- **Quiz me**: labels are hidden and the page asks you to tap a named part, then keeps score.
+- **Focus and zoom**: buttons under the picture zoom into the head, chest, abdomen, an arm or the legs and follow that region as the person moves. The + and - buttons zoom further. Labels and the quiz then cover only what is in view.
+- **Quiz me**: labels are hidden and the page asks you to tap a named part, then keeps score. In the full-body view a tap anywhere on the organ or bone counts, because taps are tested against the real shapes. **Show me** reveals the answer.
 - **Language**: English or Afaan Oromo. The Afaan Oromo names and one-line descriptions are a **draft translation** and need review by a fluent health educator before classroom use. All teaching text lives in one block, `INFO`, near the top of the script in `src/template.html`, one line per structure, so corrections are simple edits.
 
 ## Test status
@@ -42,6 +43,7 @@ Tested in headless Chrome with a still photo as the camera feed:
 - Head view: face tracking, skull alignment, jaw opening, lips following the jaw, both looks, labels, auto-fit, the photo button, desktop and phone layouts.
 - Full-body view: the skeleton and organs were posed from simulated joint positions (standing, arm raised, elbow and knee bent). Real body tracking was run on a head-and-shoulders photo only, where the skull, neck, ribs and chest organs landed on the right places.
 - Switching between the two views and back.
+- Focus and zoom on each region, and quiz rounds of ten questions in the whole view and in the chest and abdomen views with off-centre taps (simulated pose, mouse taps).
 - Tap to learn (tapping a dot and tapping a label), the language switch, and a quiz round with a wrong and a right answer, in the full-body view.
 
 Not yet tested: a live camera in full-body view, a real full-length person, phones and tablets in full-body view, Safari and Firefox in full-body view, hand bones on a real hand, and graphics-card acceleration for the tracker.
