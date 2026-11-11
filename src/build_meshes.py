@@ -10,6 +10,10 @@ OUT = sys.argv[4]
 X0 = -0.6
 SX, SY, SZ = 1.06, 1.24, 1.06   # SY applies below eye level and brings the bony chin to about 0.7 cm inside the reference chin
 S_TOP = 1.06
+DZ_INC = -6.312          # upper incisor edge, cm below the eye centre in the source data
+MOUTH_Y = -4.2
+S_MID = (2.62 - MOUTH_Y) / 6.312
+S_LOW = 1.40
 
 
 def load(i):
@@ -70,7 +74,10 @@ def to_canon(p):
     q = np.empty_like(p)
     q[:, 0] = (p[:, 0] - X0) * 0.1 * SX
     dz = (p[:, 2] - eye_c[2]) * 0.1
-    q[:, 1] = np.where(dz < 0, dz * SY, dz * S_TOP) + ANCH_Y   # stretch the short lower face only; keep the cranium near true size
+    # Piecewise vertical map. The reference skull has a short lower face, and most of the shortfall is between the teeth and the chin:
+    # eyes -> upper incisor edge lands on the lip line (y = MOUTH_Y); incisor edge -> chin lands about 1.2 cm inside the reference chin.
+    y_mid = np.where(dz < 0, dz * S_MID, dz * S_TOP)
+    q[:, 1] = np.where(dz < DZ_INC, DZ_INC * S_MID + (dz - DZ_INC) * S_LOW, y_mid) + ANCH_Y
     q[:, 2] = -(p[:, 1] - cornea_y) * 0.1 * SZ + ANCH_Z
     return q
 
@@ -94,7 +101,7 @@ for i, p in parts.items():
     v, f = simp(p['v'], p['f'], target)
     v = to_canon(v)
     p['cv'], p['cf'] = v, f
-    key = L + ('_jaw' if p['jaw'] else '')
+    key = L + ('_jaw' if p['jaw'] else '_lip' if p['name'] == 'orbicularis oris' else '')   # the lip ring is kept apart so its lower half can follow the jaw
     groups.setdefault(key, []).append((v, f))
 
 
@@ -106,7 +113,7 @@ def merge(lst):
 
 
 blob = bytearray()
-meta = dict(meshes={}, labels=[], hand={})
+meta = dict(meshes={}, labels=[], hand={}, mouthY=MOUTH_Y)
 
 
 def pack(v, f):
