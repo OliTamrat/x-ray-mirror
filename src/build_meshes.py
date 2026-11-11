@@ -11,9 +11,9 @@ X0 = -0.6
 SX, SY, SZ = 1.06, 1.24, 1.06   # SY applies below eye level and brings the bony chin to about 0.7 cm inside the reference chin
 S_TOP = 1.06
 DZ_INC = -6.312          # upper incisor edge, cm below the eye centre in the source data
-MOUTH_Y = -4.2
+MOUTH_Y = 2.62 - 6.312 * 1.12   # upper incisor edge after a mild 12% scale, about 2.5 mm below the reference lip line
 S_MID = (2.62 - MOUTH_Y) / 6.312
-S_LOW = 1.40
+S_LOW = 1.25              # kept mild so the teeth and chin keep natural proportions
 
 
 def load(i):
