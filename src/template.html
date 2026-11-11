@@ -28,6 +28,19 @@ h1{font-size:17px;font-weight:650;letter-spacing:.02em;margin:0}
 .screen{display:flex;flex-direction:column;gap:10px;min-width:0}
 .screen:fullscreen{background:#000;justify-content:center;padding:0}
 .screen:fullscreen .stage{max-width:calc((100vh - 64px) * var(--ar,1.7778));border:0;border-radius:0}
+.learn{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.learnhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.learnhead .seg{flex:0 1 auto}
+.learn button.act{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:6px 12px;min-height:36px}
+#card h2{font-size:17px;margin:0 0 2px;font-weight:650;text-wrap:balance}
+#card .alt{color:var(--muted);font-size:13px;margin:0 0 8px}
+#card .cat{display:inline-block;font:11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);background:var(--accent);border-radius:3px;padding:1px 6px;margin-bottom:8px}
+#card p{margin:0 0 6px;max-width:65ch}
+#card .om{font-size:15px}
+#card .draft{color:var(--muted);font-size:12px}
+#card .good{color:#9be7b0}#card .bad{color:var(--warn)}
+#card .big{font-size:18px;font-weight:650;margin:0 0 4px}
+.stage{cursor:pointer}
 .tools{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
 .tools button{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:8px 14px;min-height:40px}
 .tools button:disabled{opacity:.45;cursor:default}
@@ -93,6 +106,13 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <button type="button" id="full" hidden>Full screen</button>
     </div>
     </div>
+    <section class="learn" id="learn">
+      <div class="learnhead">
+        <div class="seg"><button type="button" id="lang-en" aria-pressed="true">English</button><button type="button" id="lang-om" aria-pressed="false">Afaan Oromo</button></div>
+        <button type="button" class="act" id="quiz">Quiz me</button>
+      </div>
+      <div id="card" aria-live="polite"></div>
+    </section>
     <p class="credit">Anatomy models: BodyParts3D, &copy; The Database Center for Life Science (DBCLS), licensed under <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en" target="_blank" rel="noopener">CC BY-SA 2.1 Japan</a>. The meshes here were simplified and rescaled from that dataset and are shared under the same license. This is one adult's anatomy fitted over the person in view. It is an illustration for teaching, not a medical image of that person.</p>
   </div>
 
@@ -168,14 +188,74 @@ const POSE_MODELS = [Q.get('pose'), 'https://storage.googleapis.com/mediapipe-mo
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task'].filter(Boolean);
 const HAND_MODEL = Q.get('hand') || 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 
+/* ---------- teaching content ----------
+   Each entry: [category, what it does, good to know, Afaan Oromo name, Afaan Oromo one-line description].
+   The Afaan Oromo text is a draft and needs review by a fluent health educator before classroom use. */
+const INFO = {
+  'Skull': ['Bone', 'The bony case of the head. It protects the brain and forms the face.', 'An adult skull has 22 bones: 8 around the brain and 14 in the face. All but the lower jaw are locked together by joints called sutures.', 'Lafee mataa', 'Sammuu ni eega; bifa fuulaa ni kenna.'],
+  'Frontal bone': ['Bone', 'Forms the forehead and the roof of the eye sockets, and protects the frontal lobes of the brain.', 'It contains the frontal sinuses, air spaces just above the eyebrows.', 'Lafee addaa', 'Adda fi gubbaa boolla ijaa ni uuma; sammuu fuulduraa ni eega.'],
+  'Parietal bone': ['Bone', 'A pair of bones that form the roof and upper sides of the skull.', 'The two parietal bones meet along the midline at the sagittal suture.', 'Lafee gubbaa mataa', 'Gubbaa fi cinaa mataa ni uuma.'],
+  'Temporal bone': ['Bone', 'Forms the lower side and part of the base of the skull, and houses the middle and inner ear.', 'The lower jaw hinges on it at the temporomandibular joint, just in front of the ear.', 'Lafee cinaa mataa', 'Cinaa mataa ni uuma; kutaa gurraa keessaa of keessatti qaba.'],
+  'Occipital bone': ['Bone', 'Forms the back and base of the skull.', 'The spinal cord leaves the skull through a large opening in it, the foramen magnum.', 'Lafee duuba mataa', 'Duuba mataa ni uuma; hidda dugdaa sammuu wajjin wal qunnamsiisa.'],
+  'Nasal bone': ['Bone', 'Two small bones that form the bridge of the nose.', 'The lower part of the nose is cartilage, not bone, which is why a skull has an open nasal cavity.', 'Lafee funyaanii', 'Gubbaa funyaanii ni uuma.'],
+  'Zygomatic bone (cheekbone)': ['Bone', 'Gives the cheek its shape and forms part of the outer wall and floor of the eye socket.', 'The masseter, the main chewing muscle, attaches to the arch behind it.', 'Lafee maddii', 'Bifa maddii ni kenna; boolla ijaa ni deeggara.'],
+  'Maxilla (upper jaw)': ['Bone', 'Holds the upper teeth and forms part of the hard palate, the nose and the floor of the eye socket.', 'It contains the maxillary sinus, the largest of the air sinuses.', 'Mangaagaa gubbaa', 'Ilkaan gubbaa ni qabata.'],
+  'Mandible (lower jaw)': ['Bone', 'Holds the lower teeth and moves for chewing and speaking.', 'It is the only bone of the skull that moves freely, and the largest and strongest bone of the face.', 'Mangaagaa gadii', 'Ilkaan gadii ni qabata; nyaata alanfachuu fi dubbachuuf ni socho\'a.'],
+  'Teeth': ['Teeth', 'Cut, tear and grind food to start digestion.', 'A full adult set has 32 teeth: 8 incisors, 4 canines, 8 premolars and 12 molars. Enamel is the hardest substance in the body.', 'Ilkaan', 'Nyaata ni cicciru, ni daaku.'],
+  'Frontal lobe': ['Brain', 'Planning, decisions, personality and voluntary movement.', 'Speech production is usually controlled from the left frontal lobe (Broca\'s area).', 'Kutaa sammuu fuulduraa', 'Yaaduu, murteessuu fi sochii qaamaa to\'ata.'],
+  'Parietal lobe': ['Brain', 'Processes touch, temperature and pain, and builds the sense of where the body is in space.', 'Its front strip, the somatosensory cortex, holds a map of the whole body surface.', 'Kutaa sammuu gubbaa', 'Tuqaatii, ho\'a fi dhukkubbii ni hubata.'],
+  'Temporal lobe': ['Brain', 'Hearing, understanding language and forming memories.', 'The hippocampus, deep inside it, is essential for making new memories.', 'Kutaa sammuu cinaa', 'Dhaga\'uu, afaan hubachuu fi yaadannoo ni to\'ata.'],
+  'Occipital lobe': ['Brain', 'Processes what the eyes see.', 'Although it handles vision, it sits at the very back of the head, as far from the eyes as possible.', 'Kutaa sammuu duubaa', 'Waan iji argu ni hiika.'],
+  'Cerebellum': ['Brain', 'Coordinates movement, balance and posture.', 'It is about a tenth of the brain\'s volume but holds most of its nerve cells.', 'Sammuu xiqqaa (cerebellum)', 'Sochii qaamaa fi madaala ni qindeessa.'],
+  'Pons (brainstem)': ['Brain', 'A bridge that relays signals between the cerebrum, cerebellum and spinal cord.', 'It helps control breathing and sleep, and several cranial nerves begin here.', 'Pons (hundee sammuu)', 'Ergaa kutaalee sammuu gidduutti ni dabarsa.'],
+  'Medulla oblongata': ['Brain', 'Controls heartbeat, breathing and blood pressure without conscious effort.', 'It also runs reflexes such as swallowing, coughing and vomiting, and continues downward as the spinal cord.', 'Medulla oblongata', 'Dha\'annaa onnee fi hargansuu ni to\'ata.'],
+  'Frontalis': ['Muscle', 'Raises the eyebrows and wrinkles the forehead.', 'Like all muscles of facial expression, it is controlled by the facial nerve.', 'Maashaa addaa', 'Nyaara ol kaasa.'],
+  'Temporalis': ['Muscle', 'Closes the jaw and pulls it back when chewing.', 'You can feel it tighten at the temple when you clench your teeth.', 'Maashaa cinaa mataa', 'Mangaagaa ni cufa; alanfachuuf ni gargaara.'],
+  'Orbicularis oculi': ['Muscle', 'Closes the eyelids for blinking and squeezing the eyes shut.', 'Blinking spreads tears across the eye to keep it moist and clean.', 'Maashaa naannoo ijaa', 'Ija ni cufa.'],
+  'Nasalis': ['Muscle', 'Narrows and flares the nostrils.', 'It is active during deep breathing.', 'Maashaa funyaanii', 'Qaawwa funyaanii ni bal\'isa, ni dhiphisa.'],
+  'Zygomaticus major': ['Muscle', 'Pulls the corner of the mouth up and outward.', 'It is the main muscle of smiling.', 'Maashaa seeqaa (zygomaticus major)', 'Golee afaanii ol harkisa; seequuf ni gargaara.'],
+  'Masseter': ['Muscle', 'The most powerful muscle for closing the jaw and chewing.', 'You can feel it bulge at the angle of the jaw when you bite down.', 'Maashaa alanfannaa (masseter)', 'Mangaagaa humnaan ni cufa; nyaata alanfachuuf ni gargaara.'],
+  'Orbicularis oris': ['Muscle', 'Closes and purses the lips.', 'It is used for speaking, eating, drinking and whistling.', 'Maashaa naannoo afaanii', 'Hidhii ni cufa.'],
+  'Depressor anguli oris': ['Muscle', 'Pulls the corner of the mouth downward.', 'It is the main muscle of frowning.', 'Maashaa golee afaanii gadi harkisu', 'Golee afaanii gadi harkisa.'],
+  'Mentalis': ['Muscle', 'Raises and pushes out the lower lip and wrinkles the chin.', 'It is used when pouting.', 'Maashaa mangaagaa gadii (mentalis)', 'Hidhii gadii ol kaasa.'],
+  'Eyeball': ['Organ', 'Focuses light onto the retina, which turns it into nerve signals for the brain.', 'An adult eyeball is about 24 mm across. The cornea and lens do the focusing, and the optic nerve carries the signal.', 'Ija', 'Ifa fudhatee gara sammuutti ergaa dabarsa.'],
+  'Cervical vertebrae (neck)': ['Bone', 'Seven bones that support the head and protect the spinal cord in the neck.', 'The top two, the atlas and the axis, let the head nod and turn.', 'Lafee mormaa', 'Mataa ni baata; hidda dugdaa ni eega.'],
+  'Clavicle (collarbone)': ['Bone', 'Connects the breastbone to the shoulder blade and holds the shoulder out from the chest.', 'It is one of the most commonly broken bones.', 'Lafee clavicle (qoma fi gatiittii gidduu)', 'Lafee qomaa fi gatiittii wal qunnamsiisa.'],
+  'Scapula (shoulder blade)': ['Bone', 'A flat triangular bone that carries the socket of the shoulder joint.', 'Many muscles attach to it, which lets the arm move through a very wide range.', 'Lafee gatiittii (scapula)', 'Irree qaama wajjin wal qunnamsiisa.'],
+  'Sternum (breastbone)': ['Bone', 'Sits at the front of the chest, joins the ribs through cartilage and shields the heart.', 'It has three parts: the manubrium, the body and the xiphoid process.', 'Lafee qomaa', 'Cinaacha wal qabsiisa; onnee ni eega.'],
+  'Ribs': ['Bone', 'Twelve pairs of curved bones that protect the heart and lungs and move with breathing.', 'Seven pairs join the breastbone directly, three join it indirectly and two are floating.', 'Cinaacha', 'Onnee fi somba ni eega; hargansuuf ni socho\'a.'],
+  'Lumbar vertebrae': ['Bone', 'Five large bones of the lower back that carry most of the upper body\'s weight.', 'They are the largest vertebrae, and this region is the commonest site of back pain.', 'Lafee dugdaa naannoo mudhii', 'Ulfaatina qaama gubbaa ni baata.'],
+  'Hip bone (pelvis)': ['Bone', 'Carries the socket of the hip joint and passes body weight to the legs.', 'Each hip bone is three bones fused together: the ilium, ischium and pubis. With the sacrum they form the pelvis.', 'Lafee luqqeettuu', 'Ulfaatina qaamaa gara miilaatti dabarsa.'],
+  'Sacrum': ['Bone', 'Five fused vertebrae that join the spine to the two hip bones.', 'It forms the back wall of the pelvis.', 'Sacrum (lafee dugdaa gadii)', 'Lafee dugdaa lafee luqqeettuu wajjin wal qabsiisa.'],
+  'Humerus': ['Bone', 'The bone of the upper arm, from the shoulder to the elbow.', 'Its rounded head fits the shoulder blade to form the body\'s most mobile joint.', 'Lafee irree', 'Gatiittii irraa hanga ciqileetti jira.'],
+  'Radius': ['Bone', 'The forearm bone on the thumb side.', 'It rotates around the ulna to turn the palm up or down.', 'Radius (lafee irree gadii, gama quba guddaa)', 'Harka garagalchuuf ni naanna\'a.'],
+  'Ulna': ['Bone', 'The forearm bone on the little-finger side.', 'Its upper end forms the point of the elbow.', 'Ulna (lafee irree gadii, gama quba xiqqaa)', 'Qaqqaba ciqilee ni uuma.'],
+  'Hand: carpals, metacarpals, phalanges': ['Bone', 'Twenty-seven bones that give the hand its grip and fine control.', 'There are 8 carpals in the wrist, 5 metacarpals in the palm and 14 phalanges in the fingers.', 'Lafee harkaa fi qubaa', 'Lafee 27 qaba; wanta qabachuuf ni gargaara.'],
+  'Femur (thigh bone)': ['Bone', 'The thigh bone, from the hip to the knee.', 'It is the longest and strongest bone in the body.', 'Lafee gudeedaa', 'Lafee qaamaa hunda caalaa dheeraa fi jabaa dha.'],
+  'Patella (kneecap)': ['Bone', 'Protects the front of the knee and improves the leverage of the thigh muscles.', 'It sits inside the tendon of the quadriceps muscle and is the largest bone of its kind.', 'Lafee jilbaa', 'Jilba ni eega.'],
+  'Tibia (shin bone)': ['Bone', 'The main weight-bearing bone of the lower leg.', 'Its front edge lies just under the skin and can be felt as the shin.', 'Lafee mogolee', 'Ulfaatina qaamaa jilba irraa gara miilaatti ni baata.'],
+  'Fibula': ['Bone', 'A thin bone on the outer side of the lower leg, mainly for muscle attachment.', 'Its lower end forms the bump on the outside of the ankle. It carries little body weight.', 'Fibula (lafee mogolee qal\'aa)', 'Maashaaleen itti qabatu; koomee alaa ni uuma.'],
+  'Foot: tarsals, metatarsals, phalanges': ['Bone', 'Twenty-six bones that support body weight and push off when walking.', 'There are 7 tarsals, 5 metatarsals and 14 phalanges. The arches of the foot absorb shock.', 'Lafee miilaa fi quba miilaa', 'Lafee 26 qaba; qaama ni baata.'],
+  'Lungs': ['Organ', 'Take oxygen from the air into the blood and remove carbon dioxide.', 'The right lung has three lobes and the left has two, which leaves room for the heart.', 'Somba', 'Qilleensa keessaa oksijiinii gara dhiigaatti ni dabarsa.'],
+  'Trachea (windpipe)': ['Organ', 'Carries air between the throat and the lungs.', 'Rings of cartilage keep it open. It divides into two bronchi, one for each lung.', 'Ujummoo qilleensaa', 'Qilleensa gara sombaatti ni geessa.'],
+  'Heart': ['Organ', 'Pumps blood through the body.', 'It has four chambers. The right side sends blood to the lungs and the left side sends it to the rest of the body. It is about the size of a fist.', 'Onnee', 'Dhiiga gara qaama guutuutti ni dhiiba.'],
+  'Liver': ['Organ', 'Processes nutrients, removes toxins, stores energy and makes bile.', 'It is the largest internal organ and sits in the upper right of the abdomen, under the ribs.', 'Tiruu', 'Dhiiga ni qulqulleessa; hadhooftuu ni oomisha.'],
+  'Stomach': ['Organ', 'Stores food and mixes it with acid and enzymes to begin digesting protein.', 'Its lining makes mucus that protects it from its own acid.', 'Garaacha', 'Nyaata ni kuusa; bullaa\'insa ni jalqaba.'],
+  'Spleen': ['Organ', 'Filters the blood, removes worn-out red blood cells and helps fight infection.', 'It sits in the upper left of the abdomen, protected by the lower ribs.', 'Rajiijii', 'Dhiiga ni calala; dhukkuba ittisuuf ni gargaara.'],
+  'Kidney': ['Organ', 'Filters the blood to make urine and balances water and salts.', 'There are two, at the back of the abdomen. They also help control blood pressure.', 'Kalee', 'Dhiiga calalee fincaan ni oomisha.'],
+  'Urinary bladder': ['Organ', 'Stores urine until it is passed.', 'An adult bladder comfortably holds roughly 400 to 500 mL.', 'Afuuffee fincaanii', 'Fincaan hanga bahutti ni kuusa.'],
+  'Small intestine': ['Organ', 'Finishes digestion and absorbs most nutrients into the blood.', 'It is roughly 6 m long and has three parts: the duodenum, jejunum and ileum.', 'Mar\'imaan qal\'aa', 'Soorata nyaata keessaa gara dhiigaatti ni xuuxa.'],
+  'Large intestine (colon)': ['Organ', 'Absorbs water and salts and forms stool.', 'It is roughly 1.5 m long and is home to most of the body\'s gut bacteria.', 'Mar\'imaan furdaa', 'Bishaan ni xuuxa; bobbaa ni qopheessa.'],
+};
+
 /* ---------- settings ---------- */
-const DEF = { mode: 'head', layers: { skull: true, organs: true, brain: true, muscles: false, eyes: true, outline: true, hand: true }, labels: true, look: 'xray', bright: 1, mix: 0.5,
+const DEF = { lang: 'en', mode: 'head', layers: { skull: true, organs: true, brain: true, muscles: false, eyes: true, outline: true, hand: true }, labels: true, look: 'xray', bright: 1, mix: 0.5,
   fit: { size: 1, w: 1, h: 1, j: 1, d: 1, x: 0, y: 0, z: 0 } };
 const S = JSON.parse(JSON.stringify(DEF));
 try {
   const saved = JSON.parse(localStorage.getItem('xray-mirror-5') || 'null');
   if (saved) { Object.assign(S.layers, saved.layers); Object.assign(S.fit, saved.fit);
-    for (const k of ['labels', 'look', 'bright', 'mix', 'fitted', 'mode']) if (k in saved) S[k] = saved[k]; }
+    for (const k of ['labels', 'look', 'bright', 'mix', 'fitted', 'mode', 'lang']) if (k in saved) S[k] = saved[k]; }
 } catch (e) {}
 const save = () => { try { localStorage.setItem('xray-mirror-5', JSON.stringify(S)); } catch (e) {} };
 
@@ -186,6 +266,7 @@ const SL = [['bright', S, 'bright', pct], ['mix', S, 'mix', pct], ['f-size', S.f
 function syncUI() {
   for (const k in S.layers) $('l-' + k).checked = S.layers[k];
   $('labels').checked = S.labels;
+  $('lang-en').setAttribute('aria-pressed', S.lang === 'en'); $('lang-om').setAttribute('aria-pressed', S.lang === 'om');
   $('mode-head').setAttribute('aria-pressed', S.mode === 'head'); $('mode-body').setAttribute('aria-pressed', S.mode === 'body');
   $('modetip').textContent = S.mode === 'body' ? 'Whole skeleton and organs. Stand back, or use the back camera on someone else, so the camera sees the body from head to feet.' : 'Close-up view: skull, brain, face muscles and hand bones.';
   $('look-xray').setAttribute('aria-pressed', S.look === 'xray');
@@ -228,6 +309,54 @@ async function openCamera() {
   mirrored = facing === 'user'; $('mirror').classList.toggle('on', mirrored);
   stage.style.setProperty('--ar', (video.videoWidth / video.videoHeight).toFixed(4));
 }
+/* ---------- tap to learn and quiz ---------- */
+let sel = null, selPart = -1, quiz = null, flash = null, lastItems = [];
+const disp = name => S.lang === 'om' && INFO[name] ? INFO[name][3] : name;
+function renderCard() {
+  const card = $('card'), el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  card.replaceChildren(); $('quiz').textContent = quiz ? 'End quiz' : 'Quiz me';
+  if (quiz) {
+    card.append(el('p', 'tip', 'Labels are hidden. Tap the place on the picture where this is:'), el('p', 'big', disp(quiz.target)));
+    if (quiz.msg) card.append(el('p', quiz.good ? 'good' : 'bad', quiz.msg));
+    card.append(el('p', 'tip', 'Score: ' + quiz.score + ' of ' + quiz.asked));
+    return;
+  }
+  const d = sel && INFO[sel];
+  if (!d) { card.append(el('p', 'tip', 'Tap a label or a dot on the picture to learn what that part is and what it does.')); return; }
+  const om = S.lang === 'om';
+  card.append(el('span', 'cat', d[0]), el('h2', '', om ? d[3] : sel));
+  if (om) card.append(el('p', 'alt', sel), el('p', 'om', d[4]));
+  card.append(el('p', '', d[1]), el('p', '', d[2]));
+  if (om) card.append(el('p', 'draft', 'The Afaan Oromo names and sentences are a draft translation and still need review by a fluent health educator.'));
+}
+function nextQuestion() {
+  const pool = [...new Set(lastItems.map(it => it.key))].filter(k => k !== quiz.target);
+  if (pool.length < 2) { quiz = null; sel = null; renderCard(); $('card').prepend(Object.assign(document.createElement('p'), { className: 'bad', textContent: 'Start the camera and get a face or body in view, then try the quiz again.' })); return; }
+  quiz.target = pool[Math.floor(Math.random() * pool.length)]; quiz.asked++; quiz.msg = ''; renderCard();
+}
+$('quiz').addEventListener('click', () => { if (quiz) { quiz = null; renderCard(); } else { sel = null; selPart = -1; quiz = { target: null, score: 0, asked: 0, msg: '' }; nextQuestion(); } });
+$('lang-en').addEventListener('click', () => { S.lang = 'en'; syncUI(); save(); renderCard(); });
+$('lang-om').addEventListener('click', () => { S.lang = 'om'; syncUI(); save(); renderCard(); });
+$('stage').addEventListener('click', e => {
+  if (!R || !lastItems.length) return;
+  const r = $('stage').getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  let best = null, bd = 1e9;
+  for (const it of lastItems) {
+    let d = Math.hypot(x - it.x, y - it.y);
+    if (it.drawn && !quiz) { const x0 = Math.min(it.lx, it.lx + it.side * it.tw), dx = Math.max(x0 - x, 0, x - x0 - it.tw), dy = Math.max(Math.abs(y - it.ly) - 8, 0); d = Math.min(d, Math.hypot(dx, dy)); }
+    if (d < bd) { bd = d; best = it; }
+  }
+  if (quiz) {
+    if (!best || bd > 80) return;
+    if (best.key === quiz.target) { quiz.score++; quiz.good = true; quiz.msg = 'Correct.'; flash = { name: best.key, until: performance.now() + 1400 }; renderCard(); setTimeout(() => { if (quiz) nextQuestion(); }, 1400); }
+    else { quiz.good = false; quiz.msg = 'That is: ' + disp(best.key) + '. Try again.'; flash = { name: best.key, until: performance.now() + 1400 }; renderCard(); }
+    return;
+  }
+  if (best && bd < 36) { sel = best.key; selPart = best.part == null ? -1 : best.part; } else { sel = null; selPart = -1; }
+  renderCard();
+});
+renderCard();
+
 const dbg = window.__xray = { face: false, hands: 0, jaw: 0, frames: 0, fakeHands: null, error: null };
 
 $('start').addEventListener('click', async () => {
@@ -381,7 +510,7 @@ function buildRenderer() {
   const V3 = a => new THREE.Vector3().fromArray(a);
   const bparts = BM.parts.map(d => {
     const mt = d.col ? matSet(d.col[1], d.col[0], 0.09, 0.75) : mats.bone, m = new THREE.Mesh(geo(d.mesh), mt.xo);
-    m.matrixAutoUpdate = false; m.frustumCulled = false; m.userData = { layer: d.layer, mat: mt, ortho: true, body: true }; meshes.push(m); bodyRoot.add(m);
+    m.matrixAutoUpdate = false; m.frustumCulled = false; m.userData = { layer: d.layer, mat: mt, ortho: true, body: true, pi: d.col ? BM.parts.indexOf(d) : -2 }; meshes.push(m); bodyRoot.add(m);
     return { d, m, ti: d.ti && V3(d.ti), tj: d.tj && V3(d.tj) };
   });
   const body = { parts: bparts, lm: null, vis: null, miss: 0, T: { shL: V3(BM.torso.shL), shR: V3(BM.torso.shR), hipL: V3(BM.torso.hipL), hipR: V3(BM.torso.hipR), neck: V3(BM.torso.neck) },
@@ -632,28 +761,27 @@ function drawFrame(W, Hh, cw, ch, dpr) {
   if (xray) {
     R.sil.opacity = (1 - S.mix) * 0.85;
     if (R.sil.opacity > 0.01) { for (const m of R.meshes) m.material = R.sil; pass(); }
-    for (const m of R.meshes) { const mt = m.userData.mat, x = m.userData.ortho ? mt.xo : mt.x; x.uniforms.gain.value = S.bright * mt.gain; m.material = x; }
+    for (const m of R.meshes) { const mt = m.userData.mat, x = m.userData.ortho ? mt.xo : mt.x; x.uniforms.gain.value = S.bright * mt.gain * (m.userData.pi === selPart ? 2 : 1); m.material = x; }
     pass();
   } else { for (const m of R.meshes) m.material = m.userData.mat.s; pass(); }
 
   // 2D overlay: outline and labels (drawn un-mirrored so the text reads correctly)
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, ch);
   if (bodyMode) {
-    if (!bodyOn || !S.labels) return;
-    const v = new T.Vector3(), items = [], B = R.body, put = (name, p) => items.push({ name, x: mx(p.x / W) * cw, y: -p.y / Hh * ch });
-    for (const lb of R.BM.labels) { const P = B.parts[lb.part]; if (P.m.visible) put(lb.name, v.fromArray(lb.p).applyMatrix4(P.m.matrix)); }
+    if (!bodyOn) { lastItems = []; return; }
+    const v = new T.Vector3(), items = [], B = R.body, put = (name, p, part) => items.push({ key: name, part, x: mx(p.x / W) * cw, y: -p.y / Hh * ch });
+    for (const lb of R.BM.labels) { const P = B.parts[lb.part]; if (P.m.visible) put(lb.name, v.fromArray(lb.p).applyMatrix4(P.m.matrix), lb.part); }
     if (B.ok.head && L.skull) put('Skull', v.set(0, 9, 5).applyMatrix4(R.fit.matrix).applyMatrix4(R.bodyHead.matrix));
     layoutLabels(items, mx(B.cx / W) * cw, B.half / W * cw * 1.6, cw, ch);
     return;
   }
-  if (!R.has) return;
+  if (!R.has) { lastItems = []; return; }
   if (autoFit && faceLm) measureFit(W, Hh);
   if (L.outline && faceLm) {
     ctx.beginPath(); OVAL.forEach((i, k) => { const p = faceLm[i], x = mx(p.x) * cw, y = p.y * ch; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath();
     ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(110,170,255,.28)'; ctx.lineWidth = Math.max(5, cw * 0.01); ctx.stroke();
     ctx.strokeStyle = 'rgba(170,215,255,.85)'; ctx.lineWidth = 1.5; ctx.stroke();
   }
-  if (!S.labels) return;
   scene.updateMatrixWorld();
   const v = new T.Vector3(), items = [];
   const c0 = v.set(0, 0, 0).applyMatrix4(fit.matrixWorld).project(cam), cx = mx((c0.x + 1) / 2) * cw;
@@ -663,14 +791,15 @@ function drawFrame(W, Hh, cw, ch, dpr) {
     if (!L[lb.layer]) continue;
     v.fromArray(lb.p); v.y = lowY(v.y);
     v.applyMatrix4(lb.jaw ? new T.Matrix4().multiplyMatrices(jaw.matrixWorld, new T.Matrix4().makeTranslation(-jaw.position.x, -jaw.position.y, -jaw.position.z)) : fit.matrixWorld).project(cam);
-    items.push({ name: lb.name, x: mx((v.x + 1) / 2) * cw, y: (1 - (v.y + 1) / 2) * ch });
+    items.push({ key: lb.name, x: mx((v.x + 1) / 2) * cw, y: (1 - (v.y + 1) / 2) * ch });
   }
   layoutLabels(items, cx, half, cw, ch);
 }
 // Stack labels in a column on each side of the subject and draw a leader line to each anchor.
 function layoutLabels(items, cx, half, cw, ch) {
-  const fs = Math.max(9.5, Math.min(13, cw / 70)), gap = fs * 1.35;
+  const fs = Math.max(9.5, Math.min(13, cw / 70)), gap = fs * 1.35, now = performance.now(), showAll = S.labels && !quiz;
   ctx.font = `${fs}px ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif`; ctx.textBaseline = 'middle';
+  for (const it of items) it.name = disp(it.key);
   const cols = { '-1': items.filter(it => it.x < cx), '1': items.filter(it => it.x >= cx) };
   for (const [from, to] of [['-1', '1'], ['1', '-1']]) while (cols[from].length > cols[to].length + 1) {
     cols[from].sort((p, q) => Math.abs(q.x - cx) - Math.abs(p.x - cx)); cols[to].push(cols[from].pop()); }
@@ -681,14 +810,19 @@ function layoutLabels(items, cx, half, cw, ch) {
     const mean = col.reduce((a, it) => a + it.y, 0) / col.length;
     let y = Math.max(gap, Math.min(mean - gap * (col.length - 1) / 2, ch - gap * col.length));
     for (const it of col) {
-      it.ly = y; y += gap;
-      ctx.strokeStyle = 'rgba(235,244,255,.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(it.x, it.y); ctx.lineTo(lx, it.ly); ctx.stroke();
-      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(it.x, it.y, 2, 0, 6.3); ctx.fill();
+      it.ly = y; y += gap; it.lx = lx; it.side = side; it.tw = ctx.measureText(it.name).width + 8;
+      const picked = !quiz && it.key === sel, flashed = flash && flash.name === it.key && now < flash.until;
+      it.drawn = showAll || picked || flashed; if (!it.drawn) continue;
+      const hot = picked || flashed;
+      ctx.strokeStyle = hot ? 'rgba(159,216,255,.95)' : 'rgba(235,244,255,.5)'; ctx.lineWidth = hot ? 2 : 1; ctx.beginPath(); ctx.moveTo(it.x, it.y); ctx.lineTo(lx, it.ly); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(it.x, it.y, hot ? 3.5 : 2, 0, 6.3); ctx.fill();
+      if (hot) { ctx.beginPath(); ctx.arc(it.x, it.y, 9, 0, 6.3); ctx.stroke(); }
       ctx.textAlign = side > 0 ? 'left' : 'right';
       ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(2,6,14,.8)'; ctx.strokeText(it.name, lx + side * 4, it.ly);
-      ctx.fillStyle = '#f2f7ff'; ctx.fillText(it.name, lx + side * 4, it.ly);
+      ctx.fillStyle = hot ? '#9fd8ff' : '#f2f7ff'; ctx.fillText(it.name, lx + side * 4, it.ly);
     }
   }
+  lastItems = items; dbg.items = items; dbg.quiz = quiz; dbg.sel = sel;
 }
 </script>
 </body>

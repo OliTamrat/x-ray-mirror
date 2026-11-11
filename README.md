@@ -29,6 +29,12 @@ then open `http://localhost:8000/`.
 - **Fit to my head**: **Auto-fit to my face** makes small adjustments to width and jaw length (it also runs once on first use); sliders adjust size, width, height, jaw length, depth and position. The anatomy is one adult's, so most people need a small adjustment. Settings are remembered in the browser.
 - **Save photo**, **Switch camera** (when the device has more than one), and **Full screen** (where the browser supports it).
 
+## Learning features
+
+- **Tap to learn**: tap a label or a dot on the picture to read what that part is, what it does and one thing worth knowing. There are 54 entries covering the head, skeleton and organs.
+- **Quiz me**: labels are hidden and the page asks you to tap a named part, then keeps score.
+- **Language**: English or Afaan Oromo. The Afaan Oromo names and one-line descriptions are a **draft translation** and need review by a fluent health educator before classroom use. All teaching text lives in one block, `INFO`, near the top of the script in `src/template.html`, one line per structure, so corrections are simple edits.
+
 ## Test status
 
 Tested in headless Chrome with a still photo as the camera feed:
@@ -36,6 +42,7 @@ Tested in headless Chrome with a still photo as the camera feed:
 - Head view: face tracking, skull alignment, jaw opening, lips following the jaw, both looks, labels, auto-fit, the photo button, desktop and phone layouts.
 - Full-body view: the skeleton and organs were posed from simulated joint positions (standing, arm raised, elbow and knee bent). Real body tracking was run on a head-and-shoulders photo only, where the skull, neck, ribs and chest organs landed on the right places.
 - Switching between the two views and back.
+- Tap to learn (tapping a dot and tapping a label), the language switch, and a quiz round with a wrong and a right answer, in the full-body view.
 
 Not yet tested: a live camera in full-body view, a real full-length person, phones and tablets in full-body view, Safari and Firefox in full-body view, hand bones on a real hand, and graphics-card acceleration for the tracker.
 
