@@ -4,214 +4,331 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>X-ray Mirror</title>
+<meta name="description" content="Anatomy drawn over a live camera image, for teaching. Skeleton, organs and brain follow a person as they move.">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#070b12">
+<meta name="theme-color" content="#05090f">
+<script>try { const t = localStorage.getItem('xray-theme'); if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <style>
-/* Layout: a radiology light-box. The live view is the film on the left; a narrow instrument panel sits on the right and drops below on small screens. */
+/* Layout: a radiograph on a light-box. The film (camera view or the turning reference model) is the page's one dark, glowing object;
+   everything around it is a quiet instrument panel. Before the camera starts, the model itself is the landing picture. */
+@font-face{font-family:"Bricolage Grotesque";src:url(vendor/fonts/bricolage-grotesque-latin-wght-normal.woff2) format("woff2");font-weight:200 800;font-display:swap}
+@font-face{font-family:"IBM Plex Sans";src:url(vendor/fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"IBM Plex Sans";src:url(vendor/fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"IBM Plex Sans";src:url(vendor/fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:"IBM Plex Mono";src:url(vendor/fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"IBM Plex Mono";src:url(vendor/fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2");font-weight:500;font-display:swap}
 :root{
-  color-scheme: dark;
-  --bg:#070b12; --panel:#0e1521; --panel-2:#131c2b; --line:#22304a;
-  --fg:#dbe6f5; --muted:#8497b3; --accent:#9fd8ff; --accent-ink:#06223a;
-  --bone:#cfe9ff; --brain:#ff9fb4; --muscle:#ff7a66; --eye:#9ff0ff; --warn:#ffcf7a;
-  --ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  color-scheme:dark;
+  --bg:#05090f; --surface:#0c131e; --surface-2:#131d2c; --line:#213048; --fg:#e3ebf7; --muted:#8b9cb6;
+  --accent:#9fd8ff; --accent-ink:#05213a; --accent-soft:rgba(159,216,255,.11); --warn:#ffcf7a; --good:#8fe3a8;
+  --bone:#cfe9ff; --brain:#ff9fb4; --muscle:#ff7a66; --eye:#9ff0ff; --organ:#ff6b5e;
+  --film:#02050a; --film-line:#1b2a42; --film-ink:#9fb4d0;
+  --display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  color-scheme:light;
+  --bg:#edf1f5; --surface:#ffffff; --surface-2:#f2f5f9; --line:#cfd8e3; --fg:#111b2b; --muted:#536379;
+  --accent:#0a5fb4; --accent-ink:#ffffff; --accent-soft:rgba(10,95,180,.08); --warn:#8f5200; --good:#1c7a3f;
+  --bone:#6ea3cf; --brain:#d9607e; --muscle:#cf4b38; --eye:#2fa9bd; --organ:#d6453a;
+}}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#edf1f5; --surface:#ffffff; --surface-2:#f2f5f9; --line:#cfd8e3; --fg:#111b2b; --muted:#536379;
+  --accent:#0a5fb4; --accent-ink:#ffffff; --accent-soft:rgba(10,95,180,.08); --warn:#8f5200; --good:#1c7a3f;
+  --bone:#6ea3cf; --brain:#d9607e; --muscle:#cf4b38; --eye:#2fa9bd; --organ:#d6453a;
 }
 *{box-sizing:border-box}
-html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--ui)}
-.app{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;min-height:100%;padding:16px;align-items:start}
-header.bar{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
-h1{font-size:17px;font-weight:650;letter-spacing:.02em;margin:0}
-.status{font:12px var(--mono);color:var(--muted)}
-.status b{color:var(--accent);font-weight:500}
-.status.warn b{color:var(--warn)}
-.stagewrap{min-width:0;display:flex;flex-direction:column;gap:10px}
+html,body{min-height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--ui);-webkit-font-smoothing:antialiased}
+[hidden]{display:none!important}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}
+
+.app{max-width:1500px;margin:0 auto;padding:16px 20px 40px;display:flex;flex-direction:column;gap:18px}
+/* ---- header ---- */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 20px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--fg);text-decoration:none}
+.brand svg{width:34px;height:34px;color:var(--accent);flex:none}
+.word{font:700 22px/1 var(--display);letter-spacing:-.01em}
+.word i{font-style:normal;color:var(--accent)}
+.topctl{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.seg{display:flex;gap:0;flex-wrap:wrap;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.seg button{flex:1 1 auto;background:transparent;border:0;border-right:1px solid var(--line);padding:7px 12px;min-height:38px;font-weight:500;color:var(--muted)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.seg.small button{min-height:32px;padding:4px 10px;font-size:13px}
+
+/* ---- main grid ---- */
+.main{display:grid;gap:20px 24px;grid-template-columns:minmax(0,1fr) 360px;grid-template-areas:"viewer intro" "viewer panel";grid-template-rows:auto 1fr;align-items:start}
+.app[data-state="landing"] .main{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"viewer intro" "viewer points";grid-template-rows:auto auto;align-items:start}
+.app[data-state="landing"] .intro{align-self:end}
+.points{grid-area:points}
+.app[data-state="live"] .main{grid-template-areas:"viewer panel";grid-template-rows:auto}
+.viewer{grid-area:viewer;min-width:0;display:flex;flex-direction:column;gap:12px}
+.intro{grid-area:intro;min-width:0}
+.panel{grid-area:panel;min-width:0;display:flex;flex-direction:column;gap:12px}
+.app[data-state="landing"] .panel,.app[data-state="landing"] .learn,.app[data-state="landing"] .focusbar,.app[data-state="landing"] .screen>.tools,.app[data-state="live"] .intro{display:none}
+.app:not([data-state="landing"]) .introfull,.app:not([data-state="landing"]) #explore{display:none}
+
+/* ---- landing copy ---- */
+.intro{display:flex;flex-direction:column;gap:14px}
+.introcopy{display:contents}
+.eyebrow{font:500 12px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0}
+.intro h1{font:700 clamp(34px,4.2vw,60px)/1.02 var(--display);letter-spacing:-.025em;margin:0;text-wrap:balance}
+.lede{font-size:17px;line-height:1.5;color:var(--muted);margin:0;max-width:46ch}
+.cta{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.go{background:var(--accent);color:var(--accent-ink);border:0;border-radius:var(--r);padding:13px 24px;font-weight:600;font-size:16px;min-height:48px}
+.go:disabled{opacity:.6;cursor:progress}
+.ghost{background:transparent;border:1px solid var(--line);border-radius:var(--r);padding:12px 20px;font-weight:500;min-height:48px}
+.hint{margin:0;color:var(--muted);font-size:13.5px;max-width:52ch}
+.hint.err{color:var(--warn)}
+.points{display:grid;gap:10px;margin:0;padding:16px 0 0;border-top:1px solid var(--line);max-width:52ch;align-self:start}
+.points div{display:grid;grid-template-columns:118px minmax(0,1fr);gap:12px;align-items:baseline}
+.points dt{font:500 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--fg)}
+.points dd{margin:0;color:var(--muted);font-size:14px}
+.app[data-state="model"] .intro{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:12px 14px;gap:8px}
+.app[data-state="model"] .go{padding:9px 18px;min-height:40px;font-size:15px}
+
+/* ---- the film ---- */
 .screen{display:flex;flex-direction:column;gap:10px;min-width:0}
 .screen:fullscreen{background:#000;justify-content:center;padding:0}
-.screen:fullscreen .stage{max-width:calc((100vh - 64px) * var(--ar,1.7778));border:0;border-radius:0}
-.learn{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
-.learnhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
-.learnhead .seg{flex:0 1 auto}
-.learn button.act{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:6px 12px;min-height:36px}
-#card h2{font-size:17px;margin:0 0 2px;font-weight:650;text-wrap:balance}
-#card .alt{color:var(--muted);font-size:13px;margin:0 0 8px}
-#card .cat{display:inline-block;font:11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);background:var(--accent);border-radius:3px;padding:1px 6px;margin-bottom:8px}
-#card p{margin:0 0 6px;max-width:65ch}
-#card .om{font-size:15px}
-#card .draft{color:var(--muted);font-size:12px}
-#card .good{color:#9be7b0}#card .bad{color:var(--warn)}
-#card .big{font-size:18px;font-weight:650;margin:0 0 4px}
-.stage{cursor:pointer}
-.prog{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
-.prog .who{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.prog input[type=text]{font:inherit;color:inherit;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:6px 10px;min-height:36px;width:min(100%,220px)}
-.prog table{border-collapse:collapse;width:100%;max-width:520px;font-size:13px}
-.prog th,.prog td{text-align:left;padding:3px 10px 3px 0;border-bottom:1px solid var(--line)}
-.prog th{color:var(--muted);font-weight:500}
-.prog td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
-.prog .acts{display:flex;flex-wrap:wrap;gap:8px}
-.stage video,#bg{transform-origin:0 0}
-.focusbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center}
-.focusbar .seg{flex:0 1 auto;justify-content:center}
-.focusbar .seg button{flex:0 0 auto;min-height:38px}
-.zoomer{display:flex;align-items:center;gap:6px}
-.zoomer button{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;width:40px;min-height:38px;font-size:18px;line-height:1}
-.zoomer output{font:12px var(--mono);color:var(--muted);min-width:44px;text-align:center}
-.tools{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
-.tools button{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:8px 14px;min-height:40px}
-.tools button:disabled{opacity:.45;cursor:default}
-.stage{position:relative;width:100%;max-width:calc((100vh - 110px) * var(--ar,1.7778));aspect-ratio:var(--ar,1.7778);margin:0 auto;background:#02050a;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.screen:fullscreen .film{max-width:calc((100vh - 110px) * var(--ar,1.7778));border-radius:0}
+.film{width:100%;max-width:calc((100vh - 150px) * var(--ar,.8));margin:0 auto;background:var(--film);border:1px solid var(--film-line);border-radius:var(--r);overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.3),0 18px 50px -20px rgba(20,60,110,.55)}
+.app[data-state="landing"] .film{max-width:calc((100vh - 130px) * var(--ar,1.7778))}
+.stage{position:relative;width:100%;aspect-ratio:var(--ar,.8);background:var(--film);overflow:hidden;cursor:pointer;touch-action:pan-y}
 .mirror{position:absolute;inset:0}
 .mirror.on{transform:scaleX(-1)}
 .stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .stage video{object-fit:fill}
+.stage video,#bg{transform-origin:0 0}
 #ov{pointer-events:none}
-.cover{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;background:radial-gradient(ellipse at 50% 40%,#12203a 0%,#050810 70%)}
-.cover p{margin:0;max-width:44ch;color:var(--muted)}
-.cover .err{color:var(--warn)}
-button{font:inherit;color:inherit;cursor:pointer}
-.go{background:var(--accent);color:var(--accent-ink);border:0;border-radius:5px;padding:11px 22px;font-weight:650;font-size:15px}
-.go:disabled{opacity:.6;cursor:progress}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.panel{display:flex;flex-direction:column;gap:12px;min-width:0}
-fieldset{border:1px solid var(--line);border-radius:6px;background:var(--panel);margin:0;padding:12px 14px 14px;min-width:0}
-legend{font:11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:0 6px}
-.presets,.seg{display:flex;gap:6px;flex-wrap:wrap}
-.presets button,.seg button{flex:1 1 auto;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:6px 10px}
-.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:650}
-.checks{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:10px}
+.strip{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;padding:7px 12px;border-top:1px solid var(--film-line);font:400 12px var(--mono);color:var(--film-ink);letter-spacing:.02em;min-height:32px}
+.strip::before{content:"";width:7px;height:7px;border-radius:50%;background:#5f7391;flex:none}
+.strip.on::before{background:#7dffa0;box-shadow:0 0 8px #7dffa0}
+.strip.warn::before{background:#ffcf7a}
+.strip b{font-weight:500;color:#e6eefb;white-space:nowrap}
+.focusbar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:center}
+.focusbar .seg{flex-wrap:nowrap;max-width:100%;overflow-x:auto}
+.focusbar .seg button{flex:0 0 auto;white-space:nowrap}
+.zoomer{display:flex;align-items:center;gap:6px}
+.zoomer button,.tools button,.act{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:7px 14px;min-height:38px;font-weight:500}
+.zoomer button{width:40px;padding:0;font-size:18px;line-height:1}
+.zoomer output{font:12px var(--mono);color:var(--muted);min-width:44px;text-align:center}
+.tools{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.tools button:disabled{opacity:.45;cursor:default}
+
+/* ---- learn card ---- */
+.learn{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.learnhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.learnhead h2{font:600 12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0}
+#card h2{font:700 24px/1.1 var(--display);letter-spacing:-.01em;margin:0 0 2px;text-wrap:balance}
+#card .alt{color:var(--muted);font-size:13.5px;margin:0 0 8px}
+#card .cat{display:inline-block;font:500 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);border-radius:3px;padding:2px 7px;margin-bottom:8px}
+#card p{margin:0 0 6px;max-width:65ch}
+#card .om{font-size:16px}
+#card .draft,.tip{color:var(--muted);font-size:13px}
+.tip{margin:10px 0 0}
+#card .tip{margin:0 0 6px}
+#card .good{color:var(--good)}#card .bad{color:var(--warn)}
+#card .big{font:700 26px/1.1 var(--display);margin:0 0 6px}
+.prog{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.prog .who{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.prog input[type=text]{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;min-height:38px;width:min(100%,220px)}
+.prog table{border-collapse:collapse;width:100%;max-width:540px;font-size:13.5px}
+.prog th,.prog td{text-align:left;padding:4px 10px 4px 0;border-bottom:1px solid var(--line)}
+.prog th{color:var(--muted);font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.prog td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.prog .acts{display:flex;flex-wrap:wrap;gap:8px}
+.credit{color:var(--muted);font-size:12.5px;margin:0;max-width:95ch}
+
+/* ---- instrument panel ---- */
+fieldset,details.adv{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);margin:0;padding:12px 14px 14px;min-width:0}
+legend,details.adv summary{font:500 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);padding:0 6px}
+details.adv summary{padding:2px 0;cursor:pointer;list-style-position:outside;margin-left:14px}
+details.adv[open] summary{margin-bottom:8px}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+.presets button{flex:1 1 auto;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;min-height:36px;font-weight:500}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:12px}
 .checks label,.one{display:flex;align-items:center;gap:8px;cursor:pointer}
-.dot{width:8px;height:8px;border-radius:50%;flex:none}
-.one{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
-input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;margin:0}
-.row{display:grid;grid-template-columns:104px 58px minmax(0,1fr);align-items:center;gap:8px;margin-top:8px}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+.one{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;margin:0}
+.row{display:grid;grid-template-columns:108px 58px minmax(0,1fr);align-items:center;gap:8px;margin-top:10px}
 .row output{font:12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
 input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 .link{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;margin-top:10px}
-.tip{color:var(--muted);font-size:12.5px;margin:10px 0 0}
-.credit{color:var(--muted);font-size:12px;margin:0}
-.credit a{color:var(--accent)}
-@media (max-width:860px){.app{grid-template-columns:minmax(0,1fr);padding:10px;gap:12px}.stage{max-width:calc((100vh - 150px) * var(--ar,1.7778))}.row{grid-template-columns:minmax(0,1fr) 58px;row-gap:2px}.row input{grid-column:1/-1}input[type=range]{height:28px}.checks label,.one{min-height:32px}.presets button,.seg button{min-height:40px}}
+fieldset .tools{justify-content:flex-start}
+
+@media (max-width:900px){
+  .app{padding:12px 14px 32px;gap:14px}
+  .main,.app[data-state="live"] .main{grid-template-columns:minmax(0,1fr);grid-template-areas:"intro" "viewer" "panel";grid-template-rows:auto;align-items:start}
+  .app[data-state="landing"] .main{grid-template-columns:minmax(0,1fr);grid-template-areas:"intro" "viewer" "points";grid-template-rows:auto}
+  .app[data-state="live"] .main{grid-template-areas:"viewer" "panel"}
+  .film,.app[data-state="landing"] .film{max-width:calc((100vh - 170px) * var(--ar,1.7778))}
+  .app[data-state="landing"] .film{max-width:min(100%,calc(58vh * var(--ar,1.7778)))}
+  .row{grid-template-columns:minmax(0,1fr) 58px;row-gap:2px}.row input{grid-column:1/-1}input[type=range]{height:28px}
+  .checks label,.one{min-height:32px}
+  .points div{grid-template-columns:1fr;gap:2px}
+  .word{font-size:20px}
+  .focusbar .seg button{padding:7px 9px;font-size:14px}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
-<div class="app">
-  <header class="bar">
-    <h1>X-ray Mirror</h1>
-    <div class="status" id="status" role="status"><b>Ready.</b> Nothing is recorded or uploaded; the video stays in this browser tab.</div>
+<div class="app" id="app" data-state="landing">
+  <header class="top">
+    <a class="brand" href="./" aria-label="X-ray Mirror">
+      <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true">
+        <circle cx="24" cy="24" r="20" stroke-width="2.4"/>
+        <path d="M24 11.5v25" stroke-width="3.2"/>
+        <path d="M14 18.5c2-5 18-5 20 0M13 23.5c2.5-5 19.500-5 22 0M12.500 28.500c3-5 20-5 23 0M14 33c2.500-4 17.500-4 20 0" stroke-width="2.2"/>
+      </svg>
+      <span class="word">X-ray <i>Mirror</i></span>
+    </a>
+    <div class="topctl">
+      <div class="seg small" role="group" aria-label="Language"><button type="button" id="lang-en" aria-pressed="true">English</button><button type="button" id="lang-om" aria-pressed="false">Afaan Oromo</button></div>
+      <div class="seg small" role="group" aria-label="Theme"><button type="button" data-theme-set="auto" aria-pressed="true">Auto</button><button type="button" data-theme-set="dark" aria-pressed="false">Dark</button><button type="button" data-theme-set="light" aria-pressed="false">Light</button></div>
+    </div>
   </header>
 
-  <div class="stagewrap">
-    <div class="screen" id="screen">
-    <div class="stage" id="stage">
-      <div class="mirror on" id="mirror">
-        <video id="video" playsinline muted></video>
-        <canvas id="bg"></canvas>
-        <canvas id="gl"></canvas>
+  <main class="main">
+    <section class="intro" id="cover">
+      <div class="introfull introcopy">
+        <p class="eyebrow">Anatomy teaching tool</p>
+        <h1>Learn anatomy on a living body.</h1>
+        <p class="lede">Point a camera at a person and a reference skeleton, organs and brain follow them as they move. Tap any part to learn what it does, then test yourself with the quiz.</p>
       </div>
-      <canvas id="ov"></canvas>
-      <div class="cover" id="cover">
+      <div class="cta">
         <button class="go" id="start" type="button">Start camera</button>
-        <p id="covertext">Sit facing the camera in good light. The first start downloads the tracking models (about 12 MB), so it needs an internet connection.</p>
+        <button class="ghost" id="explore" type="button">Explore the model</button>
       </div>
-    </div>
-    <div class="focusbar" id="focusbar">
-      <div class="seg" id="focus">
-        <button type="button" data-focus="whole">Whole view</button>
-        <button type="button" data-focus="head">Head</button>
-        <button type="button" data-focus="chest">Chest</button>
-        <button type="button" data-focus="abdomen">Abdomen</button>
-        <button type="button" data-focus="arm">Arm</button>
-        <button type="button" data-focus="leg">Leg</button>
-      </div>
-      <div class="zoomer"><button type="button" id="zout" aria-label="Zoom out">&minus;</button><output id="zval">100%</output><button type="button" id="zin" aria-label="Zoom in">+</button></div>
-    </div>
-    <div class="tools">
-      <button type="button" id="photo" disabled>Save photo</button>
-      <button type="button" id="flip" hidden>Switch camera</button>
-      <button type="button" id="full" hidden>Full screen</button>
-    </div>
-    </div>
-    <section class="learn" id="learn">
-      <div class="learnhead">
-        <div class="seg"><button type="button" id="lang-en" aria-pressed="true">English</button><button type="button" id="lang-om" aria-pressed="false">Afaan Oromo</button></div>
-        <span><button type="button" class="act" id="reveal" hidden>Show me</button> <button type="button" class="act" id="quiz">Quiz me</button></span>
-      </div>
-      <div id="card" aria-live="polite"></div>
-      <div class="prog" id="prog">
-        <div class="who"><label for="learner">Learner</label><input type="text" id="learner" list="learners" maxlength="40" autocomplete="off" placeholder="Name"><datalist id="learners"></datalist></div>
-        <p class="tip" id="progsum" style="margin:0"></p>
-        <div id="progtable"></div>
-        <div class="acts"><button type="button" class="act" id="progcsv">Export results (CSV)</button><button type="button" class="act" id="progclear">Clear this learner</button></div>
-        <p class="tip" style="margin:0">Quiz results are kept only in this browser on this device. Nothing is sent anywhere.</p>
-      </div>
+      <p class="hint" id="covertext">The first start downloads the tracking models (about 12 MB), so it needs an internet connection.</p>
     </section>
-    <p class="credit">Anatomy models: BodyParts3D, &copy; The Database Center for Life Science (DBCLS), licensed under <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en" target="_blank" rel="noopener">CC BY-SA 2.1 Japan</a>. The meshes here were simplified and rescaled from that dataset and are shared under the same license. This is one adult's anatomy fitted over the person in view. It is an illustration for teaching, not a medical image of that person.</p>
-  </div>
 
-  <div class="panel">
-    <fieldset>
-      <legend>View</legend>
-      <div class="seg">
-        <button type="button" id="mode-head" aria-pressed="true">Head and hands</button>
-        <button type="button" id="mode-body" aria-pressed="false">Full body</button>
-      </div>
-      <p class="tip" id="modetip">Close-up view: skull, brain, face muscles and hand bones.</p>
-    </fieldset>
-    <fieldset>
-      <legend>Layers</legend>
-      <div class="presets">
-        <button type="button" data-preset="skull">Bones</button>
-        <button type="button" data-preset="organs">Organs</button>
-        <button type="button" data-preset="brain">Brain</button>
-        <button type="button" data-preset="muscles">Muscles</button>
-        <button type="button" data-preset="all">Everything</button>
-      </div>
-      <div class="checks">
-        <label><input type="checkbox" id="l-skull"><span class="dot" style="background:var(--bone)"></span>Bones</label>
-        <label><input type="checkbox" id="l-organs"><span class="dot" style="background:#ff6b5e"></span>Organs (full body)</label>
-        <label><input type="checkbox" id="l-brain"><span class="dot" style="background:var(--brain)"></span>Brain</label>
-        <label><input type="checkbox" id="l-muscles"><span class="dot" style="background:var(--muscle)"></span>Face muscles</label>
-        <label><input type="checkbox" id="l-eyes"><span class="dot" style="background:var(--eye)"></span>Eyes</label>
-        <label><input type="checkbox" id="l-outline"><span class="dot" style="background:var(--accent)"></span>Face outline</label>
-        <label><input type="checkbox" id="l-hand"><span class="dot" style="background:var(--bone)"></span>Hand bones</label>
-      </div>
-      <label class="one"><input type="checkbox" id="labels">Show labels</label>
-    </fieldset>
 
-    <fieldset>
-      <legend>Look</legend>
-      <div class="seg">
-        <button type="button" id="look-xray" aria-pressed="true">X-ray</button>
-        <button type="button" id="look-solid" aria-pressed="false">Solid</button>
-      </div>
-      <div class="row"><label for="bright">Brightness</label><output id="o-bright"></output><input type="range" id="bright" min="0.3" max="2.5" step="0.05"></div>
-      <div class="row"><label for="mix">Real me showing through</label><output id="o-mix"></output><input type="range" id="mix" min="0" max="1" step="0.02"></div>
-    </fieldset>
+    <dl class="points introfull" id="points">
+      <div><dt>Private</dt><dd>The video stays in this browser. Nothing is recorded or uploaded.</dd></div>
+      <div><dt>Two languages</dt><dd>English and Afaan Oromo. The Afaan Oromo text is a draft under review.</dd></div>
+      <div><dt>Works offline</dt><dd>Save it once and it runs with no internet.</dd></div>
+      <div><dt>For teaching</dt><dd>It shows one reference adult's anatomy placed on the person in view. It is not a medical image of that person.</dd></div>
+    </dl>
 
-    <fieldset id="offbox" hidden>
-      <legend>Offline use</legend>
-      <div class="tools" style="justify-content:flex-start"><button type="button" id="offsave">Save for offline use</button></div>
-      <p class="tip" id="offmsg">Downloads everything the app needs (about 30 MB) so it works later with no internet. Do this once while connected.</p>
-    </fieldset>
-    <fieldset>
-      <legend>Fit to my head</legend>
-      <div class="row"><label for="f-size">Overall size</label><output id="o-f-size"></output><input type="range" id="f-size" min="0.8" max="1.25" step="0.01"></div>
-      <div class="row"><label for="f-w">Width</label><output id="o-f-w"></output><input type="range" id="f-w" min="0.8" max="1.25" step="0.01"></div>
-      <div class="row"><label for="f-h">Height</label><output id="o-f-h"></output><input type="range" id="f-h" min="0.8" max="1.25" step="0.01"></div>
-      <div class="row"><label for="f-j">Jaw length</label><output id="o-f-j"></output><input type="range" id="f-j" min="0.85" max="1.25" step="0.01"></div>
-      <div class="row"><label for="f-d">Depth</label><output id="o-f-d"></output><input type="range" id="f-d" min="0.8" max="1.25" step="0.01"></div>
-      <div class="row"><label for="f-x">Left / right</label><output id="o-f-x"></output><input type="range" id="f-x" min="-3" max="3" step="0.1"></div>
-      <div class="row"><label for="f-y">Up / down</label><output id="o-f-y"></output><input type="range" id="f-y" min="-3" max="3" step="0.1"></div>
-      <div class="row"><label for="f-z">Forward / back</label><output id="o-f-z"></output><input type="range" id="f-z" min="-3" max="3" step="0.1"></div>
-      <div class="tools" style="justify-content:flex-start;margin-top:12px"><button type="button" id="autofit" disabled>Auto-fit to my face</button></div>
-      <button type="button" class="link" id="reset">Reset fit</button>
-      <p class="tip">Auto-fit makes small adjustments to width and jaw length: look straight at the camera with your mouth closed and press it. To fine-tune by hand, pick Solid, set &ldquo;Real me showing through&rdquo; to about half, then adjust until the eye sockets sit on your eyes, the teeth on your mouth and the chin on your chin.</p>
-    </fieldset>
-  </div>
+    <section class="viewer">
+      <div class="screen" id="screen">
+        <div class="film">
+          <div class="stage" id="stage">
+            <div class="mirror on" id="mirror">
+              <video id="video" playsinline muted></video>
+              <canvas id="bg"></canvas>
+              <canvas id="gl"></canvas>
+            </div>
+            <canvas id="ov"></canvas>
+          </div>
+          <div class="strip" id="status" role="status"><b>Reference model.</b> Camera off.</div>
+        </div>
+        <div class="focusbar" id="focusbar">
+          <div class="seg" id="focus" role="group" aria-label="Focus">
+            <button type="button" data-focus="whole">Whole</button>
+            <button type="button" data-focus="head">Head</button>
+            <button type="button" data-focus="chest">Chest</button>
+            <button type="button" data-focus="abdomen">Abdomen</button>
+            <button type="button" data-focus="arm">Arm</button>
+            <button type="button" data-focus="leg">Leg</button>
+          </div>
+          <div class="zoomer"><button type="button" id="zout" aria-label="Zoom out">&minus;</button><output id="zval">100%</output><button type="button" id="zin" aria-label="Zoom in">+</button></div>
+        </div>
+        <div class="tools">
+          <button type="button" id="photo" disabled>Save photo</button>
+          <button type="button" id="flip" hidden>Switch camera</button>
+          <button type="button" id="full" hidden>Full screen</button>
+        </div>
+      </div>
+      <section class="learn" id="learn">
+        <div class="learnhead">
+          <h2>Learn</h2>
+          <span><button type="button" class="act" id="reveal" hidden>Show me</button> <button type="button" class="act" id="quiz">Quiz me</button></span>
+        </div>
+        <div id="card" aria-live="polite"></div>
+        <div class="prog" id="prog">
+          <div class="who"><label for="learner">Learner</label><input type="text" id="learner" list="learners" maxlength="40" autocomplete="off" placeholder="Name"><datalist id="learners"></datalist></div>
+          <p class="tip" id="progsum" style="margin:0"></p>
+          <div id="progtable"></div>
+          <div class="acts"><button type="button" class="act" id="progcsv">Export results (CSV)</button><button type="button" class="act" id="progclear">Clear this learner</button></div>
+          <p class="tip" style="margin:0">Quiz results are kept only in this browser on this device. Nothing is sent anywhere.</p>
+        </div>
+      </section>
+      <p class="credit">Anatomy models: BodyParts3D, &copy; The Database Center for Life Science (DBCLS), licensed under <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en" target="_blank" rel="noopener">CC BY-SA 2.1 Japan</a>. The meshes here were simplified and rescaled from that dataset and are shared under the same license. This is one adult's anatomy fitted over the person in view. It is an illustration for teaching, not a medical image of that person.</p>
+    </section>
+
+    <div class="panel" id="panel">
+      <fieldset id="viewbox">
+        <legend>View</legend>
+        <div class="seg">
+          <button type="button" id="mode-head" aria-pressed="true">Head and hands</button>
+          <button type="button" id="mode-body" aria-pressed="false">Full body</button>
+        </div>
+        <p class="tip" id="modetip">Close-up view: skull, brain, face muscles and hand bones.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Layers</legend>
+        <div class="presets">
+          <button type="button" data-preset="skull">Bones</button>
+          <button type="button" data-preset="organs">Organs</button>
+          <button type="button" data-preset="brain">Brain</button>
+          <button type="button" data-preset="muscles">Muscles</button>
+          <button type="button" data-preset="all">Everything</button>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="l-skull"><span class="dot" style="background:var(--bone)"></span>Bones</label>
+          <label><input type="checkbox" id="l-organs"><span class="dot" style="background:var(--organ)"></span>Organs (full body)</label>
+          <label><input type="checkbox" id="l-brain"><span class="dot" style="background:var(--brain)"></span>Brain</label>
+          <label><input type="checkbox" id="l-muscles"><span class="dot" style="background:var(--muscle)"></span>Face muscles</label>
+          <label><input type="checkbox" id="l-eyes"><span class="dot" style="background:var(--eye)"></span>Eyes</label>
+          <label><input type="checkbox" id="l-outline"><span class="dot" style="background:var(--accent)"></span>Face outline</label>
+          <label><input type="checkbox" id="l-hand"><span class="dot" style="background:var(--bone)"></span>Hand bones</label>
+        </div>
+        <label class="one"><input type="checkbox" id="labels">Show labels</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Look</legend>
+        <div class="seg">
+          <button type="button" id="look-xray" aria-pressed="true">X-ray</button>
+          <button type="button" id="look-solid" aria-pressed="false">Solid</button>
+        </div>
+        <div class="row"><label for="bright">Brightness</label><output id="o-bright"></output><input type="range" id="bright" min="0.3" max="2.5" step="0.05"></div>
+        <div class="row"><label for="mix">Real me showing through</label><output id="o-mix"></output><input type="range" id="mix" min="0" max="1" step="0.02"></div>
+      </fieldset>
+
+      <fieldset id="offbox" hidden>
+        <legend>Offline use</legend>
+        <div class="tools"><button type="button" id="offsave">Save for offline use</button></div>
+        <p class="tip" id="offmsg">Downloads everything the app needs (about 30 MB) so it works later with no internet. Do this once while connected.</p>
+      </fieldset>
+      <details class="adv">
+        <summary>Fit to my head</summary>
+        <div class="row"><label for="f-size">Overall size</label><output id="o-f-size"></output><input type="range" id="f-size" min="0.8" max="1.25" step="0.01"></div>
+        <div class="row"><label for="f-w">Width</label><output id="o-f-w"></output><input type="range" id="f-w" min="0.8" max="1.25" step="0.01"></div>
+        <div class="row"><label for="f-h">Height</label><output id="o-f-h"></output><input type="range" id="f-h" min="0.8" max="1.25" step="0.01"></div>
+        <div class="row"><label for="f-j">Jaw length</label><output id="o-f-j"></output><input type="range" id="f-j" min="0.85" max="1.25" step="0.01"></div>
+        <div class="row"><label for="f-d">Depth</label><output id="o-f-d"></output><input type="range" id="f-d" min="0.8" max="1.25" step="0.01"></div>
+        <div class="row"><label for="f-x">Left / right</label><output id="o-f-x"></output><input type="range" id="f-x" min="-3" max="3" step="0.1"></div>
+        <div class="row"><label for="f-y">Up / down</label><output id="o-f-y"></output><input type="range" id="f-y" min="-3" max="3" step="0.1"></div>
+        <div class="row"><label for="f-z">Forward / back</label><output id="o-f-z"></output><input type="range" id="f-z" min="-3" max="3" step="0.1"></div>
+        <div class="tools" style="margin-top:12px"><button type="button" id="autofit" disabled>Auto-fit to my face</button></div>
+        <button type="button" class="link" id="reset">Reset fit</button>
+        <p class="tip">Auto-fit makes small adjustments to width and jaw length: look straight at the camera with your mouth closed and press it. To fine-tune by hand, pick Solid, set &ldquo;Real me showing through&rdquo; to about half, then adjust until the eye sockets sit on your eyes, the teeth on your mouth and the chin on your chin.</p>
+      </details>
+    </div>
+  </main>
 </div>
 
 <script>window.XRAY_META={"meshes":{"brain":{"vo":0,"nv":26006,"io":156036,"ni":155826,"it":16,"lo":[-7.0823,-3.0728,-14.0273],"hi":[7.0774,13.8356,4.027]},"eyes":{"vo":467688,"nv":903,"io":473108,"ni":5394,"it":16,"lo":[-4.6083,0.8845,0.5868],"hi":[4.5948,4.262,4.1023]},"muscles":{"vo":483896,"nv":14120,"io":568616,"ni":83586,"it":16,"lo":[-8.2632,-6.0641,-14.8848],"hi":[8.2488,11.5596,6.139]},"muscles_jaw":{"vo":735788,"nv":736,"io":740204,"ni":4212,"it":16,"lo":[-3.6974,-7.8122,1.1133],"hi":[3.6887,-2.9368,4.6659]},"muscles_lip":{"vo":748628,"nv":561,"io":751996,"ni":3348,"it":16,"lo":[-3.2895,-6.5296,2.8208],"hi":[3.2591,-1.3607,5.6425]},"skull":{"vo":758692,"nv":29448,"io":935380,"ni":176406,"it":16,"lo":[-7.6332,-4.4576,-14.7331],"hi":[7.6239,14.3844,7.7728]},"skull_jaw":{"vo":1288192,"nv":2789,"io":1304928,"ni":16554,"it":16,"lo":[-5.3256,-8.016,-3.9541],"hi":[5.3185,1.3019,4.9501]}},"labels":[{"name":"Frontal bone","layer":"skull","jaw":false,"p":[2.57,6.93,4.51]},{"name":"Parietal bone","layer":"skull","jaw":false,"p":[-7.27,9.66,-7.53]},{"name":"Temporal bone","layer":"skull","jaw":false,"p":[-6.47,2.16,-5.14]},{"name":"Occipital bone","layer":"skull","jaw":false,"p":[-6.01,2.74,-10.02]},{"name":"Nasal bone","layer":"skull","jaw":false,"p":[0.11,1.75,5.94]},{"name":"Zygomatic bone (cheekbone)","layer":"skull","jaw":false,"p":[-4.32,0.47,2.88]},{"name":"Maxilla (upper jaw)","layer":"skull","jaw":false,"p":[-0.85,0.83,5.52]},{"name":"Mandible (lower jaw)","layer":"skull","jaw":true,"p":[0.95,-5.3,4.39]},{"name":"Teeth","layer":"skull","jaw":false,"p":[0.69,-3.22,5.16]},{"name":"Frontal lobe","layer":"brain","jaw":false,"p":[1.48,9.52,3.49]},{"name":"Parietal lobe","layer":"brain","jaw":false,"p":[-6.23,9.07,-9.11]},{"name":"Temporal lobe","layer":"brain","jaw":false,"p":[-6.6,5.16,-5.59]},{"name":"Occipital lobe","layer":"brain","jaw":false,"p":[-4.34,4.8,-11.53]},{"name":"Cerebellum","layer":"brain","jaw":false,"p":[-5.31,1.97,-8.69]},{"name":"Pons (brainstem)","layer":"brain","jaw":false,"p":[0.89,2.61,-3.61]},{"name":"Medulla oblongata","layer":"brain","jaw":false,"p":[-0.42,0.09,-4.86]},{"name":"Frontalis","layer":"muscles","jaw":false,"p":[-3.1,7.66,4.59]},{"name":"Temporalis","layer":"muscles","jaw":false,"p":[-6.82,4.94,-2.74]},{"name":"Orbicularis oculi","layer":"muscles","jaw":false,"p":[-3.31,3.3,4.2]},{"name":"Nasalis","layer":"muscles","jaw":false,"p":[0.35,1.65,6.14]},{"name":"Zygomaticus major","layer":"muscles","jaw":false,"p":[-2.7,-2.44,3.63]},{"name":"Masseter","layer":"muscles","jaw":false,"p":[-4.98,-2.29,-1.57]},{"name":"Orbicularis oris","layer":"muscles","jaw":false,"p":[1.29,-3.25,5.35]},{"name":"Depressor anguli oris","layer":"muscles","jaw":true,"p":[-2.26,-6.44,3.39]},{"name":"Mentalis","layer":"muscles","jaw":true,"p":[0.53,-7.1,4.22]},{"name":"Eyeball","layer":"eyes","jaw":false,"p":[-2.97,2.66,4.1]}],"hand":{"free":[{"vo":1338036,"nv":212,"io":1339308,"ni":1260,"it":16,"lo":[-7.7656,-0.4541,-7.9084],"hi":[7.7869,47.4459,8.0876],"a":1,"b":2,"len":47.05,"name":"right first metacarpal bone"},{"vo":1341828,"nv":212,"io":1343100,"ni":1260,"it":16,"lo":[-5.8057,-0.307,-7.2429],"hi":[7.2627,30.9416,6.6179],"a":2,"b":3,"len":30.45,"name":"proximal phalanx of right thumb"},{"vo":1345620,"nv":131,"io":1346408,"ni":780,"it":16,"lo":[-3.645,-0.1641,-6.6458],"hi":[5.5866,24.7583,6.3685],"a":3,"b":4,"len":24.49,"name":"distal phalanx of right thumb"},{"vo":1347968,"nv":212,"io":1349240,"ni":1260,"it":16,"lo":[-8.403,-0.4308,-6.668],"hi":[7.6441,40.0537,5.7092],"a":5,"b":6,"len":39.71,"name":"proximal phalanx of right index finger"},{"vo":1351760,"nv":212,"io":1353032,"ni":1260,"it":16,"lo":[-5.4706,-0.2516,-4.6316],"hi":[5.8234,25.3201,4.809],"a":6,"b":7,"len":25.05,"name":"middle phalanx of right index finger"},{"vo":1355552,"nv":132,"io":1356344,"ni":780,"it":16,"lo":[-4.4745,-0.2272,-4.1438],"hi":[4.3613,19.1739,2.832],"a":7,"b":8,"len":19.04,"name":"distal phalanx of right index finger"},{"vo":1357904,"nv":211,"io":1359172,"ni":1254,"it":16,"lo":[-7.9381,-0.4603,-6.6914],"hi":[7.9471,44.5597,5.9869],"a":9,"b":10,"len":44.36,"name":"proximal phalanx of right middle finger"},{"vo":1361680,"nv":212,"io":1362952,"ni":1260,"it":16,"lo":[-6.1341,-0.3526,-4.7885],"hi":[6.5423,30.2572,4.9371],"a":10,"b":11,"len":30.08,"name":"middle phalanx of right middle finger"},{"vo":1365472,"nv":132,"io":1366264,"ni":780,"it":16,"lo":[-4.5629,-0.2774,-4.0067],"hi":[4.8847,18.3261,2.8333],"a":11,"b":12,"len":18.15,"name":"distal phalanx of right middle finger"},{"vo":1367824,"nv":212,"io":1369096,"ni":1260,"it":16,"lo":[-6.886,-0.1036,-7.143],"hi":[6.7548,41.9301,4.6011],"a":13,"b":14,"len":41.65,"name":"proximal phalanx of right ring finger"},{"vo":1371616,"nv":212,"io":1372888,"ni":1260,"it":16,"lo":[-6.4102,-0.233,-4.8132],"hi":[5.5905,29.9423,4.5686],"a":14,"b":15,"len":29.55,"name":"middle phalanx of right ring finger"},{"vo":1375408,"nv":132,"io":1376200,"ni":780,"it":16,"lo":[-4.7744,-0.2296,-2.9478],"hi":[3.6419,15.6864,2.5708],"a":15,"b":16,"len":15.63,"name":"distal phalanx of right ring finger"},{"vo":1377760,"nv":212,"io":1379032,"ni":1260,"it":16,"lo":[-7.1375,-0.2116,-5.7104],"hi":[6.8221,34.2738,4.2533],"a":17,"b":18,"len":34.02,"name":"proximal phalanx of right little finger"},{"vo":1381552,"nv":212,"io":1382824,"ni":1260,"it":16,"lo":[-5.4443,-0.2109,-4.0963],"hi":[4.8384,22.3127,3.9327],"a":18,"b":19,"len":22.05,"name":"middle phalanx of right little finger"},{"vo":1385344,"nv":134,"io":1386148,"ni":780,"it":16,"lo":[-4.5533,-0.3909,-2.6882],"hi":[3.9052,16.4467,2.2563],"a":19,"b":20,"len":15.89,"name":"distal phalanx of right little finger"}],"palm":{"vo":1387708,"nv":2527,"io":1402872,"ni":15018,"it":16,"lo":[-40.1608,-27.8702,-90.7698],"hi":[27.5634,6.6314,2.3433]},"t5":[-34.256572979356804,-20.686591279092823,-89.64012224833914],"t17":[22.777370343705797,-23.277944249957557,-76.67839224373495],"nt":[-0.10289124524592384,-0.9598841660671547,0.2608366910258335]},"mouthY":-4.449440000000001,"jawPivot":[-0.023,1.297,-3.455]};
@@ -294,6 +411,8 @@ const INFO = {
 };
 
 /* ---------- settings ---------- */
+let demo = false, appState = 'landing';
+function setState(st) { appState = st; $('app').dataset.state = st; }
 const DEF = { lang: 'en', focus: 'whole', zoom: 1, mode: 'head', layers: { skull: true, organs: true, brain: true, muscles: false, eyes: true, outline: true, hand: true }, labels: true, look: 'xray', bright: 1, mix: 0.5,
   fit: { size: 1, w: 1, h: 1, j: 1, d: 1, x: 0, y: 0, z: 0 } };
 const S = JSON.parse(JSON.stringify(DEF));
@@ -311,9 +430,10 @@ const SL = [['bright', S, 'bright', pct], ['mix', S, 'mix', pct], ['f-size', S.f
 function syncUI() {
   for (const k in S.layers) $('l-' + k).checked = S.layers[k];
   $('labels').checked = S.labels;
-  document.querySelectorAll('[data-focus]').forEach(b => { const f = b.dataset.focus; b.hidden = S.mode !== 'body' && !['whole', 'head'].includes(f); b.setAttribute('aria-pressed', S.focus === f); });
+  document.querySelectorAll('[data-focus]').forEach(b => { const f = b.dataset.focus; b.hidden = S.mode !== 'body' && !demo && !['whole', 'head'].includes(f); b.setAttribute('aria-pressed', S.focus === f); });
   $('zval').textContent = Math.round(S.zoom * 100) + '%';
   $('lang-en').setAttribute('aria-pressed', S.lang === 'en'); $('lang-om').setAttribute('aria-pressed', S.lang === 'om');
+  $('viewbox').hidden = demo;
   $('mode-head').setAttribute('aria-pressed', S.mode === 'head'); $('mode-body').setAttribute('aria-pressed', S.mode === 'body');
   $('modetip').textContent = S.mode === 'body' ? 'Whole skeleton and organs. Stand back, or use the back camera on someone else, so the camera sees the body from head to feet.' : 'Close-up view: skull, brain, face muscles and hand bones.';
   $('look-xray').setAttribute('aria-pressed', S.look === 'xray');
@@ -335,16 +455,25 @@ document.querySelectorAll('[data-focus]').forEach(b => b.addEventListener('click
 $('zin').addEventListener('click', () => { S.zoom = ZSTEPS[Math.min(ZSTEPS.length - 1, ZSTEPS.indexOf(S.zoom) + 1)]; syncUI(); });
 $('zout').addEventListener('click', () => { S.zoom = ZSTEPS[Math.max(0, ZSTEPS.indexOf(S.zoom) - 1)]; syncUI(); });
 syncUI();
+// theme: Auto follows the device, Dark and Light override it
+const themeBtns = document.querySelectorAll('[data-theme-set]');
+function showTheme() { const t = document.documentElement.dataset.theme || 'auto'; themeBtns.forEach(b => b.setAttribute('aria-pressed', b.dataset.themeSet === t)); }
+themeBtns.forEach(b => b.addEventListener('click', () => {
+  const t = b.dataset.themeSet; if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('xray-theme', t); } catch (e) {} showTheme();
+}));
+showTheme();
 
 const statusEl = $('status');
 function setStatus(strong, rest = '', warn = false) {
-  statusEl.className = 'status' + (warn ? ' warn' : '');
+  statusEl.className = 'strip' + (warn ? ' warn' : /^Tracking/.test(strong) ? ' on' : '');
   statusEl.innerHTML = ''; const b = document.createElement('b'); b.textContent = strong; statusEl.append(b, ' ' + rest);
 }
 
 /* ---------- start ---------- */
 const video = $('video'), bg = $('bg'), bctx = bg.getContext('2d'), stage = $('stage'), glc = $('gl'), ov = $('ov'), ctx = ov.getContext('2d');
 let THREE, face, hands, pose = null, posePromise = null, mpLib = null, mpFiles = null, mpDelegate = 'GPU', R = null, mirrored = true, facing = 'user', stream = null, snap = false;
+$('explore').addEventListener('click', () => setState('model'));
 async function openCamera() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
     throw new Error('This page is open somewhere that cannot use a camera, such as a preview inside another app or a file opened without a web address. Open its https:// link in Safari, Chrome or Edge.');
@@ -358,7 +487,7 @@ async function openCamera() {
   }
   video.srcObject = stream; await video.play();
   mirrored = facing === 'user'; $('mirror').classList.toggle('on', mirrored);
-  stage.style.setProperty('--ar', (video.videoWidth / video.videoHeight).toFixed(4));
+  $('screen').style.setProperty('--ar', (video.videoWidth / video.videoHeight).toFixed(4));
 }
 /* ---------- tap to learn and quiz ---------- */
 let sel = null, selPart = -1, quiz = null, flash = null, lastItems = [];
@@ -402,7 +531,7 @@ $('reveal').addEventListener('click', () => {
 // Which structures lie under a tap. In the full-body view this tests the real shapes, so a tap anywhere on an organ or bone counts.
 function candidatesAt(x, y, cw, ch) {
   const T = THREE, B = R.body;
-  if (!(S.mode === 'body' && pose && B.lm)) return [];
+  if (!((demo || (S.mode === 'body' && pose)) && B.lm)) return [];
   const ray = new T.Raycaster(); ray.setFromCamera(new T.Vector2((mirrored ? 1 - x / cw : x / cw) * 2 - 1, 1 - 2 * y / ch), R.hcam);
   ray.ray.origin.z += 5000;   // start in front of everything; the flat view's ray otherwise starts mid-scene
   const inv = new T.Matrix4(), loc = new T.Vector3(), lp = new T.Vector3(), best = new Map();
@@ -414,9 +543,12 @@ function candidatesAt(x, y, cw, ch) {
   }
   const out = [...best.values()], hm = R.meshes.filter(m => m.userData.head && m.visible);
   if (R.bodyHead.visible && hm.length && ray.intersectObjects(hm, false).length) out.push({ key: 'Skull', part: -1, size: 1e6 });
-  return out.filter(c => lastItems.some(it => it.key === c.key)).sort((a, b) => a.size - b.size);   // smallest structure first: the most specific answer
+  const score = c => { const it = lastItems.find(i => i.key === c.key); return (Math.hypot(x - it.x, y - it.y) + 12) * Math.sqrt(c.size); };
+  return out.filter(c => lastItems.some(it => it.key === c.key)).sort((a, b) => score(a) - score(b));   // nearest dot first, smaller structures favoured
 }
 $('stage').addEventListener('click', e => {
+  if (dragMoved) return;
+  if (appState === 'landing') setState('model');
   if (!R || !lastItems.length) return;
   const r = $('stage').getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
   let near = null, nd = 1e9, lab = null, ld = 1e9;
@@ -484,7 +616,7 @@ if ('serviceWorker' in navigator && 'caches' in window && (location.protocol ===
   navigator.serviceWorker.register('sw.js').catch(() => {});
   $('offbox').hidden = false;
   const files = () => [here('./'), here('vendor/three.module.min.js'), here('vendor/tasks-vision/vision_bundle.mjs'), here('vendor/tasks-vision/wasm/vision_wasm_internal.js'),
-    here('vendor/tasks-vision/wasm/vision_wasm_internal.wasm'), here('manifest.webmanifest'), here('icon-192.png'), here(FACE_MODEL), here(HAND_MODEL), here(POSE_MODELS[0])];
+    here('vendor/tasks-vision/wasm/vision_wasm_internal.wasm'), here('manifest.webmanifest'), here('icon-192.png'), ...['bricolage-grotesque-latin-wght-normal', 'ibm-plex-sans-latin-400-normal', 'ibm-plex-sans-latin-500-normal', 'ibm-plex-sans-latin-600-normal', 'ibm-plex-mono-latin-400-normal', 'ibm-plex-mono-latin-500-normal'].map(f => here('vendor/fonts/' + f + '.woff2')), here(FACE_MODEL), here(HAND_MODEL), here(POSE_MODELS[0])];
   const ready = async () => { const c = await caches.open(OFFCACHE); for (const u of files()) if (!await c.match(u)) return false; return true; };
   const done = () => { $('offmsg').textContent = 'Saved. This device can now open and run the app with no internet.'; $('offsave').textContent = 'Saved for offline use'; };
   ready().then(ok => { if (ok) done(); }).catch(() => {});
@@ -511,7 +643,7 @@ $('start').addEventListener('click', async () => {
     setStatus('Asking for the camera…');
     await openCamera();
     setStatus('Loading the 3D engine…');
-    try { [THREE] = await firstImport(THREE_URLS, ''); } catch (e) { throw new Error('The 3D library could not be downloaded. Check the internet connection and press Start again.'); }
+    try { if (!THREE) [THREE] = await firstImport(THREE_URLS, ''); } catch (e) { throw new Error('The 3D library could not be downloaded. Check the internet connection and press Start again.'); }
     setStatus('Loading face and hand tracking…', 'about 12 MB the first time');
     let mp, MP_URL;
     try { [mp, MP_URL] = await firstImport(MP_URLS, '/vision_bundle.mjs'); } catch (e) { throw new Error('The tracking library could not be downloaded. Check the internet connection and press Start again.'); }
@@ -525,8 +657,8 @@ $('start').addEventListener('click', async () => {
     mpDelegate = Q.get('delegate') || 'GPU';
     try { [face, hands] = await make(mpDelegate); }
     catch (e) { mpDelegate = 'CPU'; try { [face, hands] = await make('CPU'); } catch (e2) { throw new Error('The tracking models could not be loaded. Check the internet connection and press Start again.'); } }
-    R = buildRenderer();
-    $('cover').hidden = true; $('cover').style.display = 'none';
+    demo = false; R = R || buildRenderer(); R.body.lm = null; sel = null; selPart = -1; quiz = null; renderCard();
+    S.focus = 'whole'; S.zoom = 1; syncUI(); setState('live');
     setStatus('Tracking.', 'Open your mouth, turn your head, hold up a hand.');
     $('photo').disabled = false; $('autofit').disabled = false;
     if (!S.fitted) autoFit = { n: 0, w: 0, b: 0 };
@@ -535,7 +667,9 @@ $('start').addEventListener('click', async () => {
     loop();
   } catch (e) {
     dbg.error = String(e && e.message || e);
-    const t = $('covertext'); t.textContent = dbg.error; t.className = 'err';
+    const t = $('covertext'); t.textContent = dbg.error; t.className = 'hint err';
+    if (appState === 'live') setState('model');
+    if (R && !demo) startDemo();
     setStatus('Not started.', '', true); btn.disabled = false; btn.textContent = 'Start camera';
   }
 });
@@ -577,14 +711,14 @@ function ensurePose() {
 }
 function applyMode() {
   if (!R) return;
-  const body = S.mode === 'body' && !!pose;
+  const body = demo || (S.mode === 'body' && !!pose);
   (body ? R.bodyHead : R.head).add(R.fit);
   R.bodyRoot.visible = body; R.has = false; R.body.lm = null; R.rigs.forEach(r => r.pts = null); faceLm = null;
   for (const m of R.meshes) if (m.userData.head) m.userData.ortho = body;
 }
 async function setMode(m) {
   S.mode = m; S.focus = 'whole'; S.zoom = 1; syncUI(); save();
-  if (!R) return;
+  if (!R || demo) return;
   if (m === 'body' && !pose) {
     setStatus('Loading body tracking…', 'about 9 MB the first time');
     try { await ensurePose(); } catch (e) { S.mode = 'head'; syncUI(); save(); setStatus('Body tracking could not be loaded.', 'Check the internet connection and try again.', true); dbg.error = 'pose: ' + (e && e.message || e); }
@@ -593,6 +727,42 @@ async function setMode(m) {
 }
 $('mode-head').addEventListener('click', () => setMode('head'));
 $('mode-body').addEventListener('click', () => setMode('body'));
+
+/* ---------- reference model (camera off) ---------- */
+let demoAng = 0.35, demoT = 0, dragMoved = false, dragX = null;
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function startDemo() {
+  demo = true; mirrored = false; $('mirror').classList.remove('on');
+  R.has = false; applyMode(); syncUI(); setStatus('Reference model.', 'Camera off. Drag to turn.');
+  $('photo').disabled = false; demoT = performance.now(); requestAnimationFrame(demoFrame);
+}
+function demoFrame(t) {
+  if (!demo) return; requestAnimationFrame(demoFrame);
+  const cw = stage.clientWidth; if (!cw) return;
+  const W = 720, Hh = 900, ar = (W / Hh).toFixed(4);
+  if ($('screen').style.getPropertyValue('--ar') !== ar) { $('screen').style.setProperty('--ar', ar); return; }
+  const ch = stage.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (glc.width !== Math.round(cw * dpr) || glc.height !== Math.round(ch * dpr)) { R.renderer.setPixelRatio(dpr); R.renderer.setSize(cw, ch, false); ov.width = Math.round(cw * dpr); ov.height = Math.round(ch * dpr); }
+  if (bg.width !== W || bg.height !== Hh) {
+    bg.width = W; bg.height = Hh; const g = bctx.createRadialGradient(W / 2, Hh * 0.42, 10, W / 2, Hh * 0.5, Math.max(W, Hh) * 0.7);
+    g.addColorStop(0, '#0d1c33'); g.addColorStop(1, '#02050a'); bctx.fillStyle = g; bctx.fillRect(0, 0, W, Hh);
+  }
+  const dt = Math.min(0.1, (t - demoT) / 1000); demoT = t;
+  if (!reduceMotion && dragX === null && !sel && !quiz) demoAng += dt * 0.22;
+  const T = THREE, J = R.BM.joints, LM = R.BM.lm, s = Hh * 0.86 / 1690, c = Math.cos(demoAng), sn = Math.sin(demoAng), P = {};
+  for (const k in LM) P[LM[k]] = J[k];
+  P[0] = [0, 657, 122]; P[7] = [75, 677, -8]; P[8] = [-75, 677, -8];
+  const pts = [], vis = [];
+  for (let i = 0; i < 33; i++) { const p = P[i]; vis.push(p ? 1 : 0); pts.push(p ? new T.Vector3(W / 2 + (p[0] * c + p[2] * sn) * s, -(Hh * 0.5 - (p[1] + 12) * s), (-p[0] * sn + p[2] * c) * s) : new T.Vector3(W / 2, -Hh / 2, 0)); }
+  R.body.lm = pts; R.body.vis = vis;
+  draw(W, Hh, cw, ch, dpr);
+}
+stage.addEventListener('pointerdown', e => { dragMoved = false; if (demo) dragX = e.clientX; });
+window.addEventListener('pointermove', e => { if (dragX === null) return; const d = e.clientX - dragX; if (Math.abs(d) > 4) dragMoved = true; if (dragMoved) { demoAng += d * 0.01; dragX = e.clientX; } });
+window.addEventListener('pointerup', () => { dragX = null; setTimeout(() => { dragMoved = false; }, 0); });
+(async () => {   // show the model as soon as the 3D library is in; if it cannot load, the page still works and Start camera loads it again
+  try { [THREE] = await firstImport(THREE_URLS, ''); R = buildRenderer(); startDemo(); } catch (e) { dbg.demoErr = String(e && e.message || e); }
+})();
 
 /* ---------- geometry ---------- */
 function buildRenderer() {
@@ -709,7 +879,7 @@ function loop() {
   const cw = stage.clientWidth, ch = stage.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
   if (glc.width !== Math.round(cw * dpr) || glc.height !== Math.round(ch * dpr)) {
     R.renderer.setPixelRatio(dpr); R.renderer.setSize(cw, ch, false); ov.width = Math.round(cw * dpr); ov.height = Math.round(ch * dpr);
-    stage.style.setProperty('--ar', (W / Hh).toFixed(4));
+    $('screen').style.setProperty('--ar', (W / Hh).toFixed(4));
   }
   if (video.currentTime !== lastT) { lastT = video.currentTime; track(W, Hh); }
   draw(W, Hh, cw, ch, dpr);
@@ -846,9 +1016,9 @@ function poseBody() {
 // Zoom: a window of the camera frame, following the chosen region. Z.x0/y0 is its top-left corner in camera pixels, Z.z the magnification.
 const Z = { z: 1, cx: 0, cy: 0, x0: 0, y0: 0 };
 function updateZoom(W, Hh) {
-  const T = THREE, bodyOn = S.mode === 'body' && !!pose && !!R.body.lm; let pts = null;
+  const T = THREE, bodyOn = (demo || (S.mode === 'body' && !!pose)) && !!R.body.lm; let pts = null;
   if (bodyOn) { pts = R.body.boxes[S.focus]; if (!pts || pts.length < 2) pts = R.body.boxes.whole; }
-  else if (S.mode !== 'body' && R.has) {
+  else if (!demo && S.mode !== 'body' && R.has) {
     R.scene.updateMatrixWorld(); const v = new T.Vector3(); pts = [];
     for (const c of [[-9, -11, 2], [9, -11, 2], [-9, 12, 2], [9, 12, 2]]) { v.fromArray(c).applyMatrix4(R.fit.matrixWorld).project(R.camFull); pts.push([(v.x + 1) / 2 * W, (1 - v.y) / 2 * Hh]); }
   }
@@ -932,7 +1102,7 @@ function drawFrame(W, Hh, cw, ch, dpr) {
   fit.position.set(PIVOT[0] * (1 - fit.scale.x) + f.x, PIVOT[1] * (1 - fit.scale.y) + f.y, PIVOT[2] * (1 - fit.scale.z) + f.z);
   jaw.rotation.x = R.jawA; deformLip(R.jawA);
   for (const rig of R.rigs) { rig.g.visible = !!rig.pts && L.hand; if (rig.g.visible) poseHand(rig); }
-  const bodyMode = S.mode === 'body' && !!pose, bodyOn = bodyMode && !!R.body.lm;
+  const bodyMode = demo || (S.mode === 'body' && !!pose), bodyOn = bodyMode && !!R.body.lm;
   R.bodyRoot.visible = bodyOn; if (bodyOn) poseBody();
   for (const rig of R.rigs) if (bodyMode) rig.g.visible = false;
   for (const m of R.meshes) m.visible = !!L[m.userData.layer] && (!m.userData.body || bodyOn);
@@ -952,6 +1122,16 @@ function drawFrame(W, Hh, cw, ch, dpr) {
 
   // 2D overlay: outline and labels (drawn un-mirrored so the text reads correctly)
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, ch);
+  { // side marker, as on a radiograph: an "L" on the subject's left
+    let side = 0;
+    if (bodyOn) { const d = (R.body.lm[11].x - R.body.lm[12].x) / W; if (Math.abs(d) > 0.03) side = d > 0 ? 1 : -1; }
+    else if (!bodyMode && R.has && faceLm) { const d = faceLm[454].x - faceLm[234].x; if (Math.abs(d) > 0.03) side = d > 0 ? 1 : -1; }
+    if (side) {
+      const right = (side > 0) !== mirrored, s = Math.max(18, Math.min(26, cw / 34)), x = right ? cw - s - 10 : 10, y = 10;
+      ctx.strokeStyle = 'rgba(230,240,255,.8)'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, s, s);
+      ctx.fillStyle = 'rgba(230,240,255,.9)'; ctx.font = `600 ${s * 0.68}px ui-monospace, Menlo, Consolas, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('L', x + s / 2, y + s / 2 + 1);
+    }
+  }
   if (bodyMode) {
     if (!bodyOn) { lastItems = []; return; }
     const v = new T.Vector3(), items = [], B = R.body, put = (name, p, part) => items.push({ key: name, part, x: mx(ZX(p.x)) * cw, y: ZY(-p.y) * ch });
@@ -984,7 +1164,7 @@ function drawFrame(W, Hh, cw, ch, dpr) {
 function layoutLabels(items, cx, half, cw, ch) {
   items = items.filter(it => it.x >= 0 && it.x <= cw && it.y >= 0 && it.y <= ch);   // only what is in view
   if (Z.zz > 1.05) { cx = cw / 2; half = cw; }   // zoomed in: labels go to the edges
-  const fs = Math.max(9.5, Math.min(13, cw / 70)), gap = fs * 1.35, now = performance.now(), showAll = S.labels && !quiz;
+  const fs = Math.max(9.5, Math.min(13, cw / 70)), gap = fs * 1.35, now = performance.now(), crowded = cw < 480 && items.length > 14, showAll = S.labels && !quiz && appState !== 'landing' && !crowded;   // on a small screen a full-body view has too many labels: show dots, and names on tap or zoom
   ctx.font = `${fs}px ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif`; ctx.textBaseline = 'middle';
   for (const it of items) it.name = disp(it.key);
   const cols = { '-1': items.filter(it => it.x < cx), '1': items.filter(it => it.x >= cx) };
@@ -999,7 +1179,8 @@ function layoutLabels(items, cx, half, cw, ch) {
     for (const it of col) {
       it.ly = y; y += gap; it.lx = lx; it.side = side; it.tw = ctx.measureText(it.name).width + 8;
       const picked = !quiz && it.key === sel, flashed = flash && flash.name === it.key && now < flash.until;
-      it.drawn = showAll || picked || flashed; if (!it.drawn) continue;
+      it.drawn = showAll || picked || flashed;
+      if (!it.drawn) { if (crowded && S.labels && !quiz) { ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.beginPath(); ctx.arc(it.x, it.y, 2.2, 0, 6.3); ctx.fill(); } continue; }
       const hot = picked || flashed;
       ctx.strokeStyle = hot ? 'rgba(159,216,255,.95)' : 'rgba(235,244,255,.5)'; ctx.lineWidth = hot ? 2 : 1; ctx.beginPath(); ctx.moveTo(it.x, it.y); ctx.lineTo(lx, it.ly); ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(it.x, it.y, hot ? 3.5 : 2, 0, 6.3); ctx.fill();

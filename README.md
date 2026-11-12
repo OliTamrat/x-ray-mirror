@@ -9,6 +9,14 @@ Everything runs in the browser tab. The camera video is not recorded and is not 
 
 The anatomy is one reference adult's, placed using points tracked on the surface of the body. It shows where structures are and what they look like. It does not show the inside of the person in view and must not be used for diagnosis.
 
+## Design
+
+- **Landing view**: before the camera starts, the page shows the reference model turning slowly, with a short introduction and two actions: Start camera, or Explore the model. The model view needs no camera: drag to turn it, tap parts, zoom into regions and run the quiz.
+- **Themes**: Auto (follows the device), Dark and Light, switched from the header. The picture itself always stays dark, like a film on a light-box.
+- **Type**: Bricolage Grotesque for the wordmark and headings, IBM Plex Sans for text, IBM Plex Mono for labels and readouts. The fonts are open-licensed (SIL OFL) and hosted with the app in `vendor/fonts`, so they work offline. They cover Latin script; another script such as Ethiopic would need an added font.
+- **Side marker**: an "L" in the corner of the picture marks the subject's left, as on a radiograph.
+- On a small screen a full-body view has too many labels to read, so it shows dots; names appear on tap or after zooming into a region.
+
 ## Use it
 
 Open the site's `https://` address in Chrome, Edge or Safari, press **Start camera**, and allow camera access. The page must be opened in a real browser tab; previews inside other apps cannot use the camera.
@@ -58,6 +66,7 @@ Tested in headless Chrome with a still photo as the camera feed:
 - Full-body view: the skeleton and organs were posed from simulated joint positions (standing, arm raised, elbow and knee bent). Real body tracking was run on a head-and-shoulders photo only, where the skull, neck, ribs and chest organs landed on the right places.
 - Switching between the two views and back.
 - Focus and zoom on each region, and quiz rounds of ten questions in the whole view and in the chest and abdomen views with off-centre taps (simulated pose, mouse taps).
+- The redesigned page at desktop and phone sizes in both themes: landing view, model view (tap, zoom, language switch), and the change to the live camera view.
 - Learner progress: a quiz with a first-tap answer, a wrong-then-right answer, a shown answer and a double tap; the summary, table, CSV export, and results surviving a reload.
 - Offline: after Save for offline use, the page was reloaded with the network switched off and both views started and tracked. This used local copies of the tracking models; saving them from Google's address is untested.
 - Tap to learn (tapping a dot and tapping a label), the language switch, and a quiz round with a wrong and a right answer, in the full-body view.
