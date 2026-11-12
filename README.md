@@ -36,6 +36,20 @@ then open `http://localhost:8000/`.
 - **Quiz me**: labels are hidden and the page asks you to tap a named part, then keeps score. In the full-body view a tap anywhere on the organ or bone counts, because taps are tested against the real shapes. **Show me** reveals the answer.
 - **Language**: English or Afaan Oromo. The Afaan Oromo names and one-line descriptions are a **draft translation** and need review by a fluent health educator before classroom use. All teaching text lives in one block, `INFO`, near the top of the script in `src/template.html`, one line per structure, so corrections are simple edits.
 
+## Learner progress
+
+- Type a name in the **Learner** box under the picture. Each learner's quiz results are kept separately.
+- For every structure the page records how many questions were asked, how many were right on the first tap, wrong taps, and how often the answer had to be shown.
+- The table lists the parts that need most practice, and the quiz asks weak and unseen parts more often.
+- **Export results (CSV)** saves all learners' results as a spreadsheet file.
+- Results are stored only in the browser on that device (localStorage). Nothing is sent to a server, so results do not follow a learner to another device, and clearing the browser's site data erases them.
+
+## Offline use
+
+- Press **Save for offline use** once while connected. It stores the page, the 3D and tracking libraries and the three tracking models (about 30 MB) on the device.
+- After that the app opens and runs with no internet, from the same address or from a home-screen icon ("Add to Home Screen" in the browser's share menu).
+- When a connection is available the page itself is fetched fresh, so updates still arrive. Files under `vendor/` are served from the saved copy; `sw.js` holds a cache version to bump when they change.
+
 ## Test status
 
 Tested in headless Chrome with a still photo as the camera feed:
@@ -44,14 +58,17 @@ Tested in headless Chrome with a still photo as the camera feed:
 - Full-body view: the skeleton and organs were posed from simulated joint positions (standing, arm raised, elbow and knee bent). Real body tracking was run on a head-and-shoulders photo only, where the skull, neck, ribs and chest organs landed on the right places.
 - Switching between the two views and back.
 - Focus and zoom on each region, and quiz rounds of ten questions in the whole view and in the chest and abdomen views with off-centre taps (simulated pose, mouse taps).
+- Learner progress: a quiz with a first-tap answer, a wrong-then-right answer, a shown answer and a double tap; the summary, table, CSV export, and results surviving a reload.
+- Offline: after Save for offline use, the page was reloaded with the network switched off and both views started and tracked. This used local copies of the tracking models; saving them from Google's address is untested.
 - Tap to learn (tapping a dot and tapping a label), the language switch, and a quiz round with a wrong and a right answer, in the full-body view.
 
-Not yet tested: a live camera in full-body view, a real full-length person, phones and tablets in full-body view, Safari and Firefox in full-body view, hand bones on a real hand, and graphics-card acceleration for the tracker.
+Not yet tested: installing to a phone's home screen, offline use on a phone, a live camera in full-body view, a real full-length person, phones and tablets in full-body view, Safari and Firefox in full-body view, hand bones on a real hand, and graphics-card acceleration for the tracker.
 
 Known limits of the full-body view: body tracking gives 33 points for the whole body, so the fit is looser than the head. The torso is posed as one piece, fingers and toes do not bend, and forearm rotation is not followed.
 
 ## How it is built
 
+- `sw.js` is the offline worker, `manifest.webmanifest` and the two icons make the app installable.
 - `index.html` is the whole app: the page, its code, and the anatomy meshes packed inline.
 - `vendor/` holds unmodified copies of three.js 0.160.0 and MediaPipe Tasks Vision 0.10.14, so the page does not depend on a CDN. If those files are missing, the page falls back to jsDelivr.
 - `src/template.html` is the page source and `src/mesh_data.js` the packed head and hand meshes. `python3 src/make.py` joins the template and data into `index.html`.

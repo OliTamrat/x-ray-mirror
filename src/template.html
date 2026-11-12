@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>X-ray Mirror</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#070b12">
 <style>
 /* Layout: a radiology light-box. The live view is the film on the left; a narrow instrument panel sits on the right and drops below on small screens. */
 :root{
@@ -41,6 +44,14 @@ h1{font-size:17px;font-weight:650;letter-spacing:.02em;margin:0}
 #card .good{color:#9be7b0}#card .bad{color:var(--warn)}
 #card .big{font-size:18px;font-weight:650;margin:0 0 4px}
 .stage{cursor:pointer}
+.prog{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.prog .who{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.prog input[type=text]{font:inherit;color:inherit;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:6px 10px;min-height:36px;width:min(100%,220px)}
+.prog table{border-collapse:collapse;width:100%;max-width:520px;font-size:13px}
+.prog th,.prog td{text-align:left;padding:3px 10px 3px 0;border-bottom:1px solid var(--line)}
+.prog th{color:var(--muted);font-weight:500}
+.prog td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.prog .acts{display:flex;flex-wrap:wrap;gap:8px}
 .stage video,#bg{transform-origin:0 0}
 .focusbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center}
 .focusbar .seg{flex:0 1 auto;justify-content:center}
@@ -130,6 +141,13 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
         <span><button type="button" class="act" id="reveal" hidden>Show me</button> <button type="button" class="act" id="quiz">Quiz me</button></span>
       </div>
       <div id="card" aria-live="polite"></div>
+      <div class="prog" id="prog">
+        <div class="who"><label for="learner">Learner</label><input type="text" id="learner" list="learners" maxlength="40" autocomplete="off" placeholder="Name"><datalist id="learners"></datalist></div>
+        <p class="tip" id="progsum" style="margin:0"></p>
+        <div id="progtable"></div>
+        <div class="acts"><button type="button" class="act" id="progcsv">Export results (CSV)</button><button type="button" class="act" id="progclear">Clear this learner</button></div>
+        <p class="tip" style="margin:0">Quiz results are kept only in this browser on this device. Nothing is sent anywhere.</p>
+      </div>
     </section>
     <p class="credit">Anatomy models: BodyParts3D, &copy; The Database Center for Life Science (DBCLS), licensed under <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en" target="_blank" rel="noopener">CC BY-SA 2.1 Japan</a>. The meshes here were simplified and rescaled from that dataset and are shared under the same license. This is one adult's anatomy fitted over the person in view. It is an illustration for teaching, not a medical image of that person.</p>
   </div>
@@ -174,6 +192,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <div class="row"><label for="mix">Real me showing through</label><output id="o-mix"></output><input type="range" id="mix" min="0" max="1" step="0.02"></div>
     </fieldset>
 
+    <fieldset id="offbox" hidden>
+      <legend>Offline use</legend>
+      <div class="tools" style="justify-content:flex-start"><button type="button" id="offsave">Save for offline use</button></div>
+      <p class="tip" id="offmsg">Downloads everything the app needs (about 30 MB) so it works later with no internet. Do this once while connected.</p>
+    </fieldset>
     <fieldset>
       <legend>Fit to my head</legend>
       <div class="row"><label for="f-size">Overall size</label><output id="o-f-size"></output><input type="range" id="f-size" min="0.8" max="1.25" step="0.01"></div>
@@ -356,13 +379,18 @@ function renderCard() {
 function nextQuestion() {
   const pool = [...new Set(lastItems.map(it => it.key))].filter(k => k !== quiz.target);
   if (pool.length < 2) { quiz = null; sel = null; renderCard(); $('card').prepend(Object.assign(document.createElement('p'), { className: 'bad', textContent: 'Start the camera and get a face or body in view, then try the quiz again.' })); return; }
-  quiz.target = pool[Math.floor(Math.random() * pool.length)]; quiz.asked++; quiz.msg = ''; renderCard();
+  // weak and unseen parts come up more often
+  const parts = learner().parts, wt = pool.map(k => { const p = parts[k]; return p && p.asked ? 1 + 3 * (1 - p.first / p.asked) : 2.5; });
+  let r = Math.random() * wt.reduce((a, b) => a + b, 0), pick = pool[0];
+  for (let i = 0; i < pool.length; i++) { r -= wt[i]; if (r <= 0) { pick = pool[i]; break; } }
+  quiz.target = pick; quiz.asked++; quiz.msg = ''; quiz.first = true; quiz.lock = false; renderCard();
 }
 $('quiz').addEventListener('click', () => { if (quiz) { quiz = null; renderCard(); } else { sel = null; selPart = -1; quiz = { target: null, score: 0, asked: 0, msg: '' }; nextQuestion(); } });
-$('lang-en').addEventListener('click', () => { S.lang = 'en'; syncUI(); save(); renderCard(); });
-$('lang-om').addEventListener('click', () => { S.lang = 'om'; syncUI(); save(); renderCard(); });
+$('lang-en').addEventListener('click', () => { S.lang = 'en'; syncUI(); save(); renderCard(); renderProgress(); });
+$('lang-om').addEventListener('click', () => { S.lang = 'om'; syncUI(); save(); renderCard(); renderProgress(); });
 $('reveal').addEventListener('click', () => {
-  if (!quiz || !quiz.target) return;
+  if (!quiz || !quiz.target || quiz.lock) return;
+  quiz.lock = true; record(quiz.target, 'shown');
   const it = lastItems.find(i => i.key === quiz.target);
   flash = { name: quiz.target, part: it && it.part != null ? it.part : -1, until: performance.now() + 2500 };
   quiz.good = true; quiz.msg = 'Here it is.'; renderCard(); setTimeout(() => { if (quiz) nextQuestion(); }, 2500);
@@ -394,11 +422,12 @@ $('stage').addEventListener('click', e => {
   }
   const cands = candidatesAt(x, y, r.width, r.height); dbg.cands = cands.map(c => c.key);
   if (quiz) {
+    if (quiz.lock) return;
     const tIt = lastItems.find(it => it.key === quiz.target), dT = tIt ? Math.hypot(x - tIt.x, y - tIt.y) : 1e9;
     const right = cands.some(c => c.key === quiz.target) || dT <= Math.max(34, 1.5 * nd);
     const guess = cands[0] ? cands[0] : nd < 80 ? near : null;
-    if (right) { quiz.score++; quiz.good = true; quiz.msg = 'Correct.'; flash = { name: quiz.target, part: tIt && tIt.part != null ? tIt.part : -1, until: performance.now() + 1400 }; renderCard(); setTimeout(() => { if (quiz) nextQuestion(); }, 1400); }
-    else if (guess) { quiz.good = false; quiz.msg = 'That is: ' + disp(guess.key) + '. Try again.'; flash = { name: guess.key, part: guess.part != null ? guess.part : -1, until: performance.now() + 1400 }; renderCard(); }
+    if (right) { quiz.lock = true; record(quiz.target, quiz.first ? 'first' : 'later'); quiz.score++; quiz.good = true; quiz.msg = 'Correct.'; flash = { name: quiz.target, part: tIt && tIt.part != null ? tIt.part : -1, until: performance.now() + 1400 }; renderCard(); setTimeout(() => { if (quiz) nextQuestion(); }, 1400); }
+    else if (guess) { quiz.first = false; record(quiz.target, 'wrong'); quiz.good = false; quiz.msg = 'That is: ' + disp(guess.key) + '. Try again.'; flash = { name: guess.key, part: guess.part != null ? guess.part : -1, until: performance.now() + 1400 }; renderCard(); }
     return;
   }
   const hit = lab && ld < 6 ? lab : cands[0] ? cands[0] : nd < 36 ? near : null;
@@ -406,6 +435,69 @@ $('stage').addEventListener('click', e => {
   renderCard();
 });
 renderCard();
+
+/* ---------- learner progress (kept in this browser only) ---------- */
+const PKEY = 'xray-mirror-progress';
+let PROG = { current: 'Guest', learners: {} };
+try { const p = JSON.parse(localStorage.getItem(PKEY) || 'null'); if (p && p.learners) PROG = p; } catch (e) {}
+function learner() { return PROG.learners[PROG.current] || (PROG.learners[PROG.current] = { parts: {} }); }
+function record(key, kind) {
+  const L = learner(), p = L.parts[key] || (L.parts[key] = { asked: 0, first: 0, wrong: 0, shown: 0 });
+  if (kind === 'wrong') p.wrong++; else { p.asked++; if (kind === 'first') p.first++; if (kind === 'shown') p.shown++; }
+  p.last = new Date().toISOString().slice(0, 10);
+  try { localStorage.setItem(PKEY, JSON.stringify(PROG)); } catch (e) {}
+  renderProgress();
+}
+function renderProgress() {
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  $('learner').value = PROG.current === 'Guest' ? '' : PROG.current;
+  $('learners').replaceChildren(...Object.keys(PROG.learners).filter(n => n !== 'Guest').map(n => Object.assign(document.createElement('option'), { value: n })));
+  const rows = Object.entries(learner().parts).filter(([, p]) => p.asked), asked = rows.reduce((a, [, p]) => a + p.asked, 0), first = rows.reduce((a, [, p]) => a + p.first, 0);
+  $('progsum').textContent = asked ? `${PROG.current}: ${asked} quiz question${asked === 1 ? '' : 's'} answered, ${Math.round(first / asked * 100)}% right on the first tap.` : `${PROG.current}: no quiz answers yet. Press Quiz me to start.`;
+  const box = $('progtable'); box.replaceChildren(); if (!rows.length) return;
+  rows.sort((a, b) => a[1].first / a[1].asked - b[1].first / b[1].asked || b[1].asked - a[1].asked);
+  const t = el('table'), h = el('tr'); h.append(el('th', '', 'Needs most practice'), el('th', '', 'Right first tap'), el('th', '', 'Shown')); t.append(h);
+  for (const [k, p] of rows.slice(0, 8)) { const tr = el('tr'); tr.append(el('td', '', disp(k)), el('td', 'n', `${p.first} of ${p.asked}`), el('td', 'n', String(p.shown))); t.append(tr); }
+  box.append(t);
+}
+$('learner').addEventListener('change', e => { PROG.current = e.target.value.trim().slice(0, 40) || 'Guest'; learner(); try { localStorage.setItem(PKEY, JSON.stringify(PROG)); } catch (err) {} renderProgress(); });
+$('progcsv').addEventListener('click', () => {
+  const q = v => '"' + String(v).replace(/"/g, '""') + '"', lines = ['learner,part,part_afaan_oromo,questions,right_first_tap,wrong_taps,shown_answer,last_date'];
+  for (const [n, L] of Object.entries(PROG.learners)) for (const [k, p] of Object.entries(L.parts)) lines.push([q(n), q(k), q(INFO[k] ? INFO[k][3] : ''), p.asked, p.first, p.wrong, p.shown, p.last || ''].join(','));
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv' })); a.download = 'xray-mirror-results.csv';
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+});
+let clearArmed = 0;
+$('progclear').addEventListener('click', e => {
+  if (Date.now() - clearArmed > 4000) { clearArmed = Date.now(); e.target.textContent = 'Tap again to clear ' + PROG.current; setTimeout(() => { e.target.textContent = 'Clear this learner'; }, 4000); return; }
+  clearArmed = 0; e.target.textContent = 'Clear this learner'; delete PROG.learners[PROG.current]; try { localStorage.setItem(PKEY, JSON.stringify(PROG)); } catch (err) {} renderProgress();
+});
+renderProgress();
+
+/* ---------- offline use ---------- */
+const OFFCACHE = 'xray-mirror-v1';   // must match sw.js
+if ('serviceWorker' in navigator && 'caches' in window && (location.protocol === 'https:' || LOCAL)) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+  $('offbox').hidden = false;
+  const files = () => [here('./'), here('vendor/three.module.min.js'), here('vendor/tasks-vision/vision_bundle.mjs'), here('vendor/tasks-vision/wasm/vision_wasm_internal.js'),
+    here('vendor/tasks-vision/wasm/vision_wasm_internal.wasm'), here('manifest.webmanifest'), here('icon-192.png'), here(FACE_MODEL), here(HAND_MODEL), here(POSE_MODELS[0])];
+  const ready = async () => { const c = await caches.open(OFFCACHE); for (const u of files()) if (!await c.match(u)) return false; return true; };
+  const done = () => { $('offmsg').textContent = 'Saved. This device can now open and run the app with no internet.'; $('offsave').textContent = 'Saved for offline use'; };
+  ready().then(ok => { if (ok) done(); }).catch(() => {});
+  $('offsave').addEventListener('click', async () => {
+    const b = $('offsave'), list = files(); b.disabled = true;
+    try {
+      const c = await caches.open(OFFCACHE);
+      for (let i = 0; i < list.length; i++) {
+        $('offmsg').textContent = `Saving for offline use: file ${i + 1} of ${list.length}…`;
+        if (await c.match(list[i])) continue;
+        const res = await fetch(list[i]); if (!res.ok) throw new Error('HTTP ' + res.status); await c.put(list[i], res);
+      }
+      done();
+    } catch (e) { $('offmsg').textContent = 'Could not finish saving. Check the internet connection and try again.'; dbg.offErr = String(e && e.message || e); }
+    b.disabled = false;
+  });
+}
 
 const dbg = window.__xray = { face: false, hands: 0, jaw: 0, frames: 0, fakeHands: null, error: null };
 
