@@ -44,6 +44,17 @@ then open `http://localhost:8000/`.
 - **Quiz me**: labels are hidden and the page asks you to tap a named part, then keeps score. In the full-body view a tap anywhere on the organ or bone counts, because taps are tested against the real shapes. **Show me** reveals the answer.
 - **Language**: English or Afaan Oromo. The Afaan Oromo names and one-line descriptions are a **draft translation** and need review by a fluent health educator before classroom use. All teaching text lives in one block, `INFO`, near the top of the script in `src/template.html`, one line per structure, so corrections are simple edits.
 
+## Assess (prototype for evaluation)
+
+The **Assess** tab under the picture is a prototype for discussion and testing with clinical partners. It is **not validated** for use by health workers or with this app, and must not be used to decide a person's care.
+
+- **Movement**: with the camera on in Full body view, it shows shoulder, elbow, hip and knee angles for both sides, live. **Record movement** captures the smallest and largest angle of each joint about five times a second, and **Export movement (CSV)** saves the recording. Angles come from the body tracker's 3D points; they are approximate and have not been checked against a goniometer.
+- **Ankle or foot** and **Knee**: the Ottawa Ankle Rules and the Ottawa Knee Rule as yes/no questions, with the outcome the rule gives for those answers.
+- **Leg clot risk**: the two-level Wells score for deep vein thrombosis as set out in NICE guidance, with the score and its category.
+- **Notes**: a plain-text summary of the answers, outcomes and recorded movement, to copy or save. It takes a case number, not a name, and is not stored by the app.
+
+The rules were written for clinicians. The wording here is a plain-language rendering that a clinician must review before any field use. Sources used for the criteria: [Ottawa ankle rules](https://en.wikipedia.org/wiki/Ottawa_ankle_rules), [The Ottawa knee rules, RACGP](https://www.racgp.org.au/afp/2012/april/the-ottawa-knee-rules), [Two-level Wells score for DVT, GPnotebook citing NICE](https://gpnotebook.com/pages/cardiovascular-medicine/two-level-wells-score-for-dvt). The Assess tab is in English only.
+
 ## Learner progress
 
 - Type a name in the **Learner** box under the picture. Each learner's quiz results are kept separately.
@@ -67,6 +78,7 @@ Tested in headless Chrome with a still photo as the camera feed:
 - Switching between the two views and back.
 - Focus and zoom on each region, and quiz rounds of ten questions in the whole view and in the chest and abdomen views with off-centre taps (simulated pose, mouse taps).
 - The redesigned page at desktop and phone sizes in both themes: landing view, model view (tap, zoom, language switch), and the change to the live camera view.
+- Assess: joint angles from a simulated pose with known bends (readings matched the pose once the reference skeleton's resting angles are allowed for), recording and CSV export, each rule's outcome for several answer sets, the notes, and the phone layout. No clinician has reviewed the wording, and angles have not been measured on a real person.
 - Learner progress: a quiz with a first-tap answer, a wrong-then-right answer, a shown answer and a double tap; the summary, table, CSV export, and results surviving a reload.
 - Offline: after Save for offline use, the page was reloaded with the network switched off and both views started and tracked. This used local copies of the tracking models; saving them from Google's address is untested.
 - Tap to learn (tapping a dot and tapping a label), the language switch, and a quiz round with a wrong and a right answer, in the full-body view.

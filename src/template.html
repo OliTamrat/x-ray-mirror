@@ -146,6 +146,31 @@ a{color:var(--accent)}
 .prog th{color:var(--muted);font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase}
 .prog td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
 .prog .acts{display:flex;flex-wrap:wrap;gap:8px}
+.notice{border:1px solid var(--warn);border-radius:var(--r);padding:10px 12px;margin:0;color:var(--fg);font-size:13.5px;max-width:80ch}
+.notice b{color:var(--warn)}
+#assesspane{display:flex;flex-direction:column;gap:12px}
+#assesspane[hidden]{display:none}
+#atabs{align-self:flex-start;max-width:100%;overflow-x:auto;flex-wrap:nowrap}
+#atabs button{flex:0 0 auto;white-space:nowrap}
+#apane{display:flex;flex-direction:column;gap:10px}
+#apane .tip{margin:0;max-width:75ch}
+#apane .src{font:500 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0}
+#apane .bad{color:var(--warn);margin:0}
+.q{display:flex;gap:12px;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px}
+.q p{margin:0;max-width:62ch}
+.q .seg{flex:none}
+.outcome{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;background:var(--surface-2)}
+.outcome.flag{border-color:var(--warn)}
+.outcome.clear{border-color:var(--good)}
+.outcome .big{font:600 17px/1.3 var(--ui);margin:0 0 6px}
+#apane table{border-collapse:collapse;width:100%;max-width:620px;font-size:14px}
+#apane th,#apane td{text-align:left;padding:5px 10px 5px 0;border-bottom:1px solid var(--line)}
+#apane th{color:var(--muted);font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase}
+#apane td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+#apane td[id^="mv-"]{font:500 18px var(--mono)}
+#apane .acts,#apane .who{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#apane textarea,#caseid{font:13px/1.45 var(--mono);color:inherit;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;width:100%;max-width:760px}
+#caseid{font:inherit;width:min(100%,220px);min-height:38px}
 .credit{color:var(--muted);font-size:12.5px;margin:0;max-width:95ch}
 
 /* ---- instrument panel ---- */
@@ -253,9 +278,10 @@ fieldset .tools{justify-content:flex-start}
       </div>
       <section class="learn" id="learn">
         <div class="learnhead">
-          <h2>Learn</h2>
+          <div class="seg small" role="group" aria-label="Section"><button type="button" id="tab-learn" aria-pressed="true">Learn</button><button type="button" id="tab-assess" aria-pressed="false">Assess</button></div>
           <span><button type="button" class="act" id="reveal" hidden>Show me</button> <button type="button" class="act" id="quiz">Quiz me</button></span>
         </div>
+        <div id="learnpane" style="display:contents">
         <div id="card" aria-live="polite"></div>
         <div class="prog" id="prog">
           <div class="who"><label for="learner">Learner</label><input type="text" id="learner" list="learners" maxlength="40" autocomplete="off" placeholder="Name"><datalist id="learners"></datalist></div>
@@ -263,6 +289,15 @@ fieldset .tools{justify-content:flex-start}
           <div id="progtable"></div>
           <div class="acts"><button type="button" class="act" id="progcsv">Export results (CSV)</button><button type="button" class="act" id="progclear">Clear this learner</button></div>
           <p class="tip" style="margin:0">Quiz results are kept only in this browser on this device. Nothing is sent anywhere.</p>
+        </div>
+        </div>
+        <div id="assesspane" hidden>
+          <p class="notice"><b>Prototype for evaluation.</b> These checks follow published rules written for clinicians. They have not been validated for use by health workers or with this app, and must not be used to decide a person's care.</p>
+          <div class="seg small" id="atabs" role="group" aria-label="Assessment">
+            <button type="button" data-atab="move">Movement</button><button type="button" data-atab="ankle">Ankle or foot</button><button type="button" data-atab="knee">Knee</button><button type="button" data-atab="clot">Leg clot risk</button><button type="button" data-atab="summary">Notes</button>
+          </div>
+          <div id="apane"></div>
+          <input type="text" id="caseid" maxlength="30" autocomplete="off" placeholder="e.g. 0142" hidden>
         </div>
       </section>
       <p class="credit">Anatomy models: BodyParts3D, &copy; The Database Center for Life Science (DBCLS), licensed under <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en" target="_blank" rel="noopener">CC BY-SA 2.1 Japan</a>. The meshes here were simplified and rescaled from that dataset and are shared under the same license. This is one adult's anatomy fitted over the person in view. It is an illustration for teaching, not a medical image of that person.</p>
@@ -606,6 +641,147 @@ $('progclear').addEventListener('click', e => {
 });
 renderProgress();
 
+/* ---------- assess (prototype for evaluation) ----------
+   The three checks reproduce published decision rules written for clinicians:
+   Ottawa Ankle Rules, Ottawa Knee Rule, and the two-level Wells score for DVT (as set out in NICE guidance).
+   They are not validated for use by health workers or with this app. */
+const CHECKS = {
+  ankle: { title: 'Ankle or foot injury', source: 'Ottawa Ankle Rules', focus: 'leg',
+    applies: 'For a recent ankle or foot injury. Studies support the rules in adults and in children over about 6. They do not apply to pregnant women or to anyone who cannot follow the test, for example after a head injury or when intoxicated.',
+    q: [['mz', 'Is there any pain around the ankle bones (the malleolar zone)?', 'Tibia (shin bone)'],
+      ['lat', 'Bone tenderness along the lower 6 cm of the back edge of the fibula, or at the tip of the outer ankle bone?', 'Fibula'],
+      ['med', 'Bone tenderness along the lower 6 cm of the back edge of the tibia, or at the tip of the inner ankle bone?', 'Tibia (shin bone)'],
+      ['mf', 'Is there any pain in the middle of the foot (the midfoot zone)?', 'Foot: tarsals, metatarsals, phalanges'],
+      ['m5', 'Bone tenderness at the base of the fifth metatarsal (outer edge of the midfoot)?', 'Foot: tarsals, metatarsals, phalanges'],
+      ['nav', 'Bone tenderness at the navicular bone (inner side of the midfoot)?', 'Foot: tarsals, metatarsals, phalanges'],
+      ['wb', 'Unable to take four steps both right after the injury and now?', null]],
+    result: a => { const ankle = a.mz && (a.lat || a.med || a.wb), foot = a.mf && (a.m5 || a.nav || a.wb);
+      return { flag: ankle || foot, text: (ankle ? 'By this rule an ankle X-ray is indicated. ' : '') + (foot ? 'By this rule a foot X-ray is indicated. ' : '') + (!ankle && !foot ? 'By this rule no X-ray is indicated. ' : '') }; } },
+  knee: { title: 'Knee injury', source: 'Ottawa Knee Rule', focus: 'leg',
+    applies: 'For a recent knee injury in adults. Evidence in children is preliminary.',
+    q: [['age', 'Is the person aged 55 or over?', null],
+      ['fib', 'Tenderness at the head of the fibula (the bony bump on the outer side, just below the knee)?', 'Fibula'],
+      ['pat', 'Tenderness of the kneecap only, with no other bone tenderness around the knee?', 'Patella (kneecap)'],
+      ['flex', 'Unable to bend the knee to 90 degrees? (The Movement tab can measure the bend.)', 'Patella (kneecap)'],
+      ['wb', 'Unable to take four steps (two on each leg, limping allowed) both right after the injury and now?', null]],
+    result: a => { const x = a.age || a.fib || a.pat || a.flex || a.wb; return { flag: x, text: x ? 'By this rule a knee X-ray is indicated. ' : 'By this rule no knee X-ray is indicated. ' }; } },
+  clot: { title: 'Leg clot risk', source: 'Two-level Wells score for DVT (NICE guidance)', focus: 'leg', points: true,
+    applies: 'For a swollen or painful leg where a deep vein clot is a concern. The last item needs a clinician\'s judgement.',
+    q: [['ca', 'Active cancer (treatment within the last six months, or palliative)?', null, 1],
+      ['par', 'Paralysis, weakness, or a recent plaster cast of the leg?', null, 1],
+      ['bed', 'Recently in bed for 3 days or more, or major surgery in the last 12 weeks?', null, 1],
+      ['ten', 'Localised tenderness along the line of the deep veins?', 'Tibia (shin bone)', 1],
+      ['leg', 'Is the whole leg swollen?', 'Femur (thigh bone)', 1],
+      ['calf', 'Calf at least 3 cm bigger around than the other calf (measured 10 cm below the bony bump under the kneecap)?', 'Tibia (shin bone)', 1],
+      ['pit', 'Pitting swelling (a finger press leaves a dent) in the affected leg only?', 'Tibia (shin bone)', 1],
+      ['col', 'Visible surface veins that are not varicose veins?', null, 1],
+      ['prev', 'A previous deep vein clot, confirmed at the time?', null, 1],
+      ['alt', 'Is another diagnosis at least as likely as a clot?', null, -2]],
+    result: (a, q) => { const n = q.reduce((s, [id, , , pts]) => s + (a[id] ? pts : 0), 0), likely = n >= 2;
+      return { flag: likely, text: `Wells score ${n}: a clot is ${likely ? 'likely (2 points or more). In published pathways this leads to an ultrasound scan of the leg veins. ' : 'unlikely (1 point or less). In published pathways a blood test is the usual next step. '}` }; } },
+};
+const JOINTS = [['shoulder', 'Shoulder lift'], ['elbow', 'Elbow bend'], ['hip', 'Hip bend'], ['knee', 'Knee bend']];
+const A = { tab: 'move', ans: { ankle: {}, knee: {}, clot: {} }, rec: false, t0: 0, range: {}, samples: [], last: 0 };
+function jointAngles(P, vis) {
+  const ang = (a, b, c) => P[a].clone().sub(P[b]).angleTo(P[c].clone().sub(P[b])) * 180 / Math.PI, ok = (...i) => i.every(k => vis[k] > 0.5), out = {};
+  for (const [s, sh, el, wr, hp, kn, an] of [['left', 11, 13, 15, 23, 25, 27], ['right', 12, 14, 16, 24, 26, 28]]) {
+    out['shoulder_' + s] = ok(sh, el, hp) ? ang(el, sh, hp) : null;          // 0 = arm at the side
+    out['elbow_' + s] = ok(sh, el, wr) ? 180 - ang(sh, el, wr) : null;       // 0 = straight
+    out['hip_' + s] = ok(sh, hp, kn) ? 180 - ang(sh, hp, kn) : null;         // 0 = standing straight
+    out['knee_' + s] = ok(hp, kn, an) ? 180 - ang(hp, kn, an) : null;        // 0 = straight
+  }
+  return out;
+}
+function moveTick(now) {
+  if (now - A.last < 200) return; A.last = now;
+  const ang = R && R.body.ang, live = !!ang && !demo;
+  if (A.rec && live) {
+    const row = { t: +((now - A.t0) / 1000).toFixed(1) };
+    for (const k in ang) { const v = ang[k]; row[k] = v == null ? '' : Math.round(v); if (v != null) { const r = A.range[k] || (A.range[k] = [v, v]); r[0] = Math.min(r[0], v); r[1] = Math.max(r[1], v); } }
+    if (A.samples.length < 6000) A.samples.push(row);
+  }
+  if (A.tab !== 'move' || $('assesspane').hidden) return;
+  $('movemsg').hidden = live; $('movetable').hidden = !live;
+  for (const [j] of JOINTS) for (const s of ['left', 'right']) {
+    const k = j + '_' + s, v = live ? ang[k] : null, r = A.range[k];
+    $('mv-' + k).textContent = v == null ? '–' : Math.round(v) + '°';
+    $('mr-' + k).textContent = r ? Math.round(r[0]) + '° to ' + Math.round(r[1]) + '°' : '';
+  }
+}
+function assessOutcome(id) {
+  const c = CHECKS[id], a = A.ans[id], left = c.q.filter(([q]) => a[q] === undefined).length;
+  return left ? { done: false, left } : { done: true, ...c.result(a, c.q) };
+}
+function summaryText() {
+  const L = ['X-ray Mirror: assessment notes (prototype, for evaluation only)', 'Date: ' + new Date().toISOString().slice(0, 10), 'Case: ' + ($('caseid').value.trim() || 'not given'), ''];
+  for (const id in CHECKS) {
+    const c = CHECKS[id], a = A.ans[id]; if (!Object.keys(a).length) continue;
+    L.push(c.title + ' (' + c.source + ')'); for (const [q, text] of c.q) L.push('  ' + (a[q] === undefined ? '[ ? ]' : a[q] ? '[yes]' : '[no ]') + ' ' + text);
+    const o = assessOutcome(id); L.push('  Outcome: ' + (o.done ? o.text.trim() : 'not complete, ' + o.left + ' question(s) unanswered'), '');
+  }
+  const ranges = JOINTS.flatMap(([j, name]) => ['left', 'right'].map(s => { const r = A.range[j + '_' + s]; return r ? `  ${name}, ${s}: ${Math.round(r[0])} to ${Math.round(r[1])} degrees` : null; })).filter(Boolean);
+  if (ranges.length) L.push('Movement recorded from the camera (approximate, not validated)', ...ranges, '');
+  L.push('These notes follow published rules written for clinicians. They are not a diagnosis. A clinician decides on tests and treatment.');
+  return L.join('\n');
+}
+function saveText(name, text, type) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + text], { type })); a.download = name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function renderAssess() {
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const btn = (text, fn, cls) => { const b = el('button', cls || 'act', text); b.type = 'button'; b.addEventListener('click', fn); return b; };
+  document.querySelectorAll('[data-atab]').forEach(b => b.setAttribute('aria-pressed', b.dataset.atab === A.tab));
+  const cid = $('caseid'); cid.hidden = true; $('assesspane').append(cid);   // keep the case-number box alive across re-renders
+  const pane = $('apane'); pane.replaceChildren();
+  if (A.tab === 'move') {
+    pane.append(el('p', 'tip', 'Joint angles measured from the camera. They are approximate and have not been checked against a goniometer. 0° means the arm is at the side, or the joint is straight.'));
+    const msg = el('p', 'bad', 'Start the camera and choose Full body, with the whole person in view, to measure movement.'); msg.id = 'movemsg'; pane.append(msg);
+    const t = el('table'); t.id = 'movetable'; t.hidden = true; const h = el('tr'); for (const x of ['Joint', 'Left now', 'Left recorded', 'Right now', 'Right recorded']) h.append(el('th', '', x)); t.append(h);
+    for (const [j, name] of JOINTS) { const tr = el('tr'); tr.append(el('td', '', name)); for (const s of ['left', 'right']) { const a = el('td', 'n'), b = el('td', 'n'); a.id = 'mv-' + j + '_' + s; b.id = 'mr-' + j + '_' + s; tr.append(a, b); } t.append(tr); }
+    const acts = el('div', 'acts');
+    acts.append(btn(A.rec ? 'Stop recording' : 'Record movement', () => { A.rec = !A.rec; if (A.rec) { A.range = {}; A.samples = []; A.t0 = performance.now(); } renderAssess(); }),
+      btn('Export movement (CSV)', () => { if (!A.samples.length) return; const cols = ['t', ...JOINTS.flatMap(([j]) => [j + '_left', j + '_right'])];
+        saveText('xray-mirror-movement.csv', ['seconds,' + cols.slice(1).map(c => c + '_degrees').join(','), ...A.samples.map(r => cols.map(c => r[c]).join(','))].join('\n'), 'text/csv'); }));
+    pane.append(t, acts, el('p', 'tip', A.rec ? 'Recording. Ask the person to move the joint through its full range, then press Stop.' : A.samples.length ? `Last recording: ${A.samples.length} samples over ${A.samples[A.samples.length - 1].t} seconds.` : 'Record to capture the smallest and largest angle of each joint, five times a second.'));
+    A.last = 0; return;
+  }
+  if (A.tab === 'summary') {
+    const who = el('div', 'who'), lab = el('label', '', 'Case number'); lab.htmlFor = 'caseid';
+    const ta = el('textarea'); ta.id = 'sumtext'; ta.readOnly = true; ta.rows = 12; ta.value = summaryText();
+    const inp = $('caseid'); inp.hidden = false; who.append(lab, inp); inp.oninput = () => { ta.value = summaryText(); };
+    const acts = el('div', 'acts');
+    acts.append(btn('Copy notes', async e => { try { await navigator.clipboard.writeText(ta.value); e.target.textContent = 'Copied'; } catch (err) { ta.select(); } }), btn('Save notes as a file', () => saveText('xray-mirror-notes.txt', ta.value, 'text/plain')),
+      btn('Clear all answers', () => { A.ans = { ankle: {}, knee: {}, clot: {} }; A.range = {}; A.samples = []; renderAssess(); }));
+    pane.append(el('p', 'tip', 'Use a case number, not a name. These notes are not saved by the app: copy or save them before closing the page.'), who, ta, acts);
+    return;
+  }
+  const c = CHECKS[A.tab], a = A.ans[A.tab];
+  pane.append(el('p', 'src', c.source), el('p', 'tip', c.applies));
+  for (const [q, text, show, pts] of c.q) {
+    const row = el('div', 'q'), t = el('p', '', text + (c.points ? ` (${pts > 0 ? '+' : '−'}${Math.abs(pts)})` : '')), seg = el('div', 'seg small');
+    for (const [label, val] of [['Yes', true], ['No', false]]) { const b = btn(label, () => { a[q] = val; if (show && lastItems.some(i => i.key === show)) { sel = show; selPart = -1; } renderAssess(); }, ' '); b.className = ''; b.setAttribute('aria-pressed', a[q] === val); seg.append(b); }
+    row.append(t, seg); pane.append(row);
+  }
+  const o = assessOutcome(A.tab), box = el('div', 'outcome' + (o.done ? o.flag ? ' flag' : ' clear' : ''));
+  box.append(el('p', 'big', o.done ? o.text.trim() : `Answer the remaining ${o.left} question${o.left === 1 ? '' : 's'} to see what the rule says.`));
+  if (o.done) box.append(el('p', 'tip', 'This is what the published rule says for these answers. It is not a diagnosis. Refer to a clinician, who decides on tests and treatment. Deformity, an open wound, numbness, a cold or pale limb, chest pain or shortness of breath need urgent care whatever the rule says.'));
+  pane.append(box);
+}
+document.querySelectorAll('[data-atab]').forEach(b => b.addEventListener('click', () => {
+  A.tab = b.dataset.atab; const c = CHECKS[A.tab];
+  if (c && (demo || (S.mode === 'body' && pose))) { S.focus = c.focus; S.zoom = 1; syncUI(); }
+  renderAssess();
+}));
+function showPane(which) {
+  $('tab-learn').setAttribute('aria-pressed', which === 'learn'); $('tab-assess').setAttribute('aria-pressed', which === 'assess');
+  $('learnpane').hidden = which !== 'learn'; $('assesspane').hidden = which !== 'assess';
+  $('quiz').hidden = which !== 'learn'; if (which !== 'learn') $('reveal').hidden = true;
+  if (which === 'assess') { if (quiz) { quiz = null; renderCard(); } renderAssess(); }
+}
+$('tab-learn').addEventListener('click', () => showPane('learn'));
+$('tab-assess').addEventListener('click', () => showPane('assess'));
+
 /* ---------- offline use ---------- */
 const OFFCACHE = 'xray-mirror-v1';   // must match sw.js
 if ('serviceWorker' in navigator && 'caches' in window && (location.protocol === 'https:' || LOCAL)) {
@@ -933,9 +1109,13 @@ function track(W, Hh) {
 function trackBody(W, Hh, ts) {
   const T = THREE, B = R.body, res = dbg.fakePose || pose.detectForVideo(video, ts), lm = res.landmarks && res.landmarks[0];
   dbg.pose = lm ? 1 : 0;
-  if (!lm) { if (++B.miss > 8) B.lm = null; return; }
+  if (!lm) { if (++B.miss > 8) { B.lm = null; B.ang = null; } moveTick(performance.now()); return; }
   B.miss = 0;
   const pts = lm.map(l => new T.Vector3(l.x * W, -l.y * Hh, -l.z * W)), vis = lm.map(l => l.visibility == null ? 1 : l.visibility);
+  // joint angles: prefer the tracker's metric 3D points, which are steadier in depth than the picture coordinates
+  const wl = res.worldLandmarks && res.worldLandmarks[0], raw = jointAngles(wl ? wl.map(l => new T.Vector3(l.x, l.y, l.z)) : pts, vis);
+  B.ang = B.ang || {}; for (const k in raw) B.ang[k] = raw[k] == null ? null : B.ang[k] == null ? raw[k] : B.ang[k] + (raw[k] - B.ang[k]) * 0.4;
+  dbg.ang = B.ang; moveTick(performance.now());
   if (!B.lm) { B.lm = pts; B.vis = vis; return; }
   for (let i = 0; i < pts.length; i++) {
     const a = B.lm[i], b = pts[i], k = Math.hypot(b.x - a.x, b.y - a.y) > W * 0.03 ? 0.85 : 0.5;   // quick on real movement, steady otherwise; depth is always smoothed
